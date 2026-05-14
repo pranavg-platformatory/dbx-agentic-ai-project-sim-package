@@ -1,1 +1,1 @@
-from runner import SimRunner
+from .runner import SimRunner

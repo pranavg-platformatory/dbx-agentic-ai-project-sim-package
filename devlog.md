@@ -23,6 +23,8 @@
   - [Pre-Development Notes](#pre-development-notes-4)
   - [Development Notes before `runner.py`](#development-notes-before-runnerpy)
   - [Development Notes for `runner.py`](#development-notes-for-runnerpy)
+- [Stage 7: `viz`](#stage-7-viz)
+  - [Pre-Development Notes](#pre-development-notes-5)
  
 ---
 
@@ -300,3 +302,7 @@ for each tick:
 ```
 
 ## Development Notes for `runner.py`
+Just an orchestrator for the simulation.
+
+# Stage 7: `viz`
+## Pre-Development Notes

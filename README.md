@@ -3,9 +3,11 @@
 *Simulation package for the Databricks agentic AI project.*
 
 <h1>Package</h1>
+
 [`warehouse_sim`](./warehouse_sim/)
 
 <h1>Devlog</h1>
+
 [`devlog.md`](./devlog.md)
 
 <h1>Implementation Notes</h1>

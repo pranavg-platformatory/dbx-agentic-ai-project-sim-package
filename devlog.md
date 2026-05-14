@@ -9,6 +9,7 @@
   - [Post-Development Notes](#post-development-notes)
 - [Stage 2: `world`](#stage-2-world)
   - [Pre-Development Notes](#pre-development-notes)
+  - [Development Notes](#development-notes)
   - [Post-Development Notes](#post-development-notes-1)
  
 ---
@@ -47,7 +48,7 @@ A few things worth noting before we move on:
 [`warehouse_sim/world`](./warehouse_sim/world/)
 
 ## Pre-Development Notes
-Stage 2 sits directly on top of Stage 1 and does one thing: takes a SimWorld object and writes it into the Databricks env tables. It's the mirror image of loader.py — where the loader reads env tables into typed models, setup.py writes typed models into env tables.
+Stage 2 sits directly on top of Stage 1 and does one thing: takes a SimWorld object and writes it into the Databricks env tables. It's the mirror image of loader.py - where the loader reads env tables into typed models, setup.py writes typed models into env tables.
 
 ```
 Stage 1 produced:                    Stage 2 consumes / produces:
@@ -60,11 +61,11 @@ loader.py (reads)     ◄──────────────────�
 
 Concretely:
 
-- `setup.py` takes a hand-built SimWorld (or one constructed programmatically) and persists every entity into the env tables — this is the world initialisation step that runs once before the engine starts
-patterns.py takes a Pattern model (from Stage 1) and a tick number, and returns a sampled float demand/supply value — this is the sampling logic the engine will call every tick in Stage 4
-Neither file knows anything about the engine or the agent — they only depend on Stage 1 models
+- `setup.py` takes a hand-built SimWorld (or one constructed programmatically) and persists every entity into the env tables; this is the world initialisation step that runs once before the engine starts
+- `patterns.py` takes a Pattern model (from Stage 1) and a tick number, and returns a sampled float demand/supply value; this is the sampling logic the engine will call every tick in Stage 4
+- Neither file knows anything about the engine or the agent; they only depend on Stage 1 models
 
-The Stage 1 notebook went the other way (seeded tables manually, then called load_world). Stage 2 flips it: you define the world in Python, call setup.write_world(spark, world), then optionally call load_world to verify the round-trip.
+## Development Notes
 
 
 ## Post-Development Notes

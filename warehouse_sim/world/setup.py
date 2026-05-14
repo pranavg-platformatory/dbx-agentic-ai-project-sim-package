@@ -45,6 +45,87 @@ def _t(name: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Explicit DDL schemas per table
+# These prevent PySpark from inferring long instead of int, missing nullability
+# on arrays, or ambiguous boolean/double types - same class of issues seen
+# in the Stage 1 notebook when using createDataFrame without a schema.
+# ---------------------------------------------------------------------------
+
+_SCHEMAS = {
+    "env_sim_config": """
+        sim_id                     STRING,
+        random_seed                BIGINT,
+        num_ticks                  INT,
+        run_mode                   STRING,
+        tick_unit                  STRING,
+        budget_limit               DOUBLE,
+        budget_warning_threshold   DOUBLE,
+        agent_history_window_ticks INT,
+        start_timestamp            TIMESTAMP,
+        created_at                 TIMESTAMP
+    """,
+    "env_item_types": """
+        item_id                          STRING,
+        item_name                        STRING,
+        unit_value                       DOUBLE,
+        initial_stock                    INT,
+        reorder_point                    INT,
+        min_order_qty                    INT,
+        max_order_qty                    INT,
+        holding_cost_per_unit_per_tick   DOUBLE,
+        stockout_cost_per_unit_per_tick  DOUBLE,
+        order_fixed_cost                 DOUBLE,
+        order_variable_cost_per_unit     DOUBLE,
+        transit_loss_cost_per_unit       DOUBLE
+    """,
+    "env_suppliers": """
+        supplier_id            STRING,
+        supplier_name          STRING,
+        base_lead_time_ticks   INT,
+        lead_time_variability  DOUBLE
+    """,
+    "env_consumers": """
+        consumer_id    STRING,
+        consumer_name  STRING
+    """,
+    "env_supplier_item_map": """
+        sim_id       STRING,
+        supplier_id  STRING,
+        item_id      STRING
+    """,
+    "env_consumer_item_map": """
+        sim_id       STRING,
+        consumer_id  STRING,
+        item_id      STRING
+    """,
+    "env_patterns": """
+        pattern_id                    STRING,
+        sim_id                        STRING,
+        item_id                       STRING,
+        role                          STRING,
+        pattern_type                  STRING,
+        distribution                  STRING,
+        dist_params                   STRING,
+        custom_schedule               ARRAY<DOUBLE>,
+        seasonal_multiplier_schedule  ARRAY<DOUBLE>,
+        noise_std                     DOUBLE,
+        supplier_id                   STRING
+    """,
+    "env_disruption_schedule": """
+        disruption_id        STRING,
+        sim_id               STRING,
+        item_id              STRING,
+        disruption_type      STRING,
+        start_tick           INT,
+        end_tick             INT,
+        magnitude            DOUBLE,
+        is_stochastic        BOOLEAN,
+        trigger_probability  DOUBLE
+    """,
+}
+
+
+# ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
@@ -52,10 +133,14 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _Row(**kwargs):
-    """Lazy Row constructor so this module is importable without PySpark installed."""
-    from pyspark.sql import Row
-    return Row(**kwargs)
+def _write(spark: "SparkSession", table_key: str, rows: list[dict]) -> None:
+    """
+    Create a DataFrame from a list of plain dicts using the explicit schema
+    for that table, then append to the Delta table.
+    Using explicit schemas avoids all PySpark type inference surprises.
+    """
+    schema = _SCHEMAS[table_key].strip()
+    spark.createDataFrame(rows, schema=schema).write.mode("append").saveAsTable(_t(table_key))
 
 
 def _delete_sim_rows(spark: "SparkSession", sim_id: str) -> None:
@@ -79,19 +164,18 @@ def _delete_sim_rows(spark: "SparkSession", sim_id: str) -> None:
 # ---------------------------------------------------------------------------
 
 def _write_sim_config(spark: "SparkSession", config: SimConfig) -> None:
-    row = _Row(
-        sim_id                     = config.sim_id,
-        random_seed                = config.random_seed,
-        num_ticks                  = config.num_ticks,
-        run_mode                   = config.run_mode.value,
-        tick_unit                  = config.tick_unit.value,
-        budget_limit               = config.budget_limit,
-        budget_warning_threshold   = config.budget_warning_threshold,
-        agent_history_window_ticks = config.agent_history_window_ticks,
-        start_timestamp            = config.start_timestamp,
-        created_at                 = config.created_at or _now(),
-    )
-    spark.createDataFrame([row]).write.mode("append").saveAsTable(_t("env_sim_config"))
+    _write(spark, "env_sim_config", [{
+        "sim_id":                     config.sim_id,
+        "random_seed":                config.random_seed,
+        "num_ticks":                  config.num_ticks,
+        "run_mode":                   config.run_mode.value,
+        "tick_unit":                  config.tick_unit.value,
+        "budget_limit":               config.budget_limit,
+        "budget_warning_threshold":   config.budget_warning_threshold,
+        "agent_history_window_ticks": config.agent_history_window_ticks,
+        "start_timestamp":            config.start_timestamp,
+        "created_at":                 config.created_at or _now(),
+    }])
 
 
 def _write_items(spark: "SparkSession", items: dict[str, ItemType]) -> None:
@@ -99,55 +183,51 @@ def _write_items(spark: "SparkSession", items: dict[str, ItemType]) -> None:
     env_item_types has no sim_id — upsert pattern: delete by item_id then insert.
     Safe because item definitions are expected to be consistent across runs.
     """
-    item_ids = list(items.keys())
-    ids_sql  = ", ".join(f"'{i}'" for i in item_ids)
+    ids_sql = ", ".join(f"'{i}'" for i in items)
     spark.sql(f"DELETE FROM {_t('env_item_types')} WHERE item_id IN ({ids_sql})")
 
-    rows = [
-        _Row(
-            item_id                         = it.item_id,
-            item_name                       = it.item_name,
-            unit_value                      = it.unit_value,
-            initial_stock                   = it.initial_stock,
-            reorder_point                   = it.reorder_point,
-            min_order_qty                   = it.min_order_qty,
-            max_order_qty                   = it.max_order_qty,
-            holding_cost_per_unit_per_tick  = it.holding_cost_per_unit_per_tick,
-            stockout_cost_per_unit_per_tick = it.stockout_cost_per_unit_per_tick,
-            order_fixed_cost                = it.order_fixed_cost,
-            order_variable_cost_per_unit    = it.order_variable_cost_per_unit,
-            transit_loss_cost_per_unit      = it.transit_loss_cost_per_unit,
-        )
+    _write(spark, "env_item_types", [
+        {
+            "item_id":                         it.item_id,
+            "item_name":                       it.item_name,
+            "unit_value":                      it.unit_value,
+            "initial_stock":                   it.initial_stock,
+            "reorder_point":                   it.reorder_point,
+            "min_order_qty":                   it.min_order_qty,
+            "max_order_qty":                   it.max_order_qty,
+            "holding_cost_per_unit_per_tick":  it.holding_cost_per_unit_per_tick,
+            "stockout_cost_per_unit_per_tick": it.stockout_cost_per_unit_per_tick,
+            "order_fixed_cost":                it.order_fixed_cost,
+            "order_variable_cost_per_unit":    it.order_variable_cost_per_unit,
+            "transit_loss_cost_per_unit":      it.transit_loss_cost_per_unit,
+        }
         for it in items.values()
-    ]
-    spark.createDataFrame(rows).write.mode("append").saveAsTable(_t("env_item_types"))
+    ])
 
 
 def _write_suppliers(spark: "SparkSession", suppliers: dict[str, Supplier]) -> None:
     ids_sql = ", ".join(f"'{s}'" for s in suppliers)
     spark.sql(f"DELETE FROM {_t('env_suppliers')} WHERE supplier_id IN ({ids_sql})")
 
-    rows = [
-        _Row(
-            supplier_id           = s.supplier_id,
-            supplier_name         = s.supplier_name,
-            base_lead_time_ticks  = s.base_lead_time_ticks,
-            lead_time_variability = s.lead_time_variability,
-        )
+    _write(spark, "env_suppliers", [
+        {
+            "supplier_id":           s.supplier_id,
+            "supplier_name":         s.supplier_name,
+            "base_lead_time_ticks":  s.base_lead_time_ticks,
+            "lead_time_variability": s.lead_time_variability,
+        }
         for s in suppliers.values()
-    ]
-    spark.createDataFrame(rows).write.mode("append").saveAsTable(_t("env_suppliers"))
+    ])
 
 
 def _write_consumers(spark: "SparkSession", consumers: dict[str, Consumer]) -> None:
     ids_sql = ", ".join(f"'{c}'" for c in consumers)
     spark.sql(f"DELETE FROM {_t('env_consumers')} WHERE consumer_id IN ({ids_sql})")
 
-    rows = [
-        _Row(consumer_id=c.consumer_id, consumer_name=c.consumer_name)
+    _write(spark, "env_consumers", [
+        {"consumer_id": c.consumer_id, "consumer_name": c.consumer_name}
         for c in consumers.values()
-    ]
-    spark.createDataFrame(rows).write.mode("append").saveAsTable(_t("env_consumers"))
+    ])
 
 
 def _write_supplier_item_map(
@@ -155,11 +235,10 @@ def _write_supplier_item_map(
     sim_id: str,
     supplier_item_map: dict[str, str],  # item_id -> supplier_id
 ) -> None:
-    rows = [
-        _Row(sim_id=sim_id, supplier_id=supplier_id, item_id=item_id)
+    _write(spark, "env_supplier_item_map", [
+        {"sim_id": sim_id, "supplier_id": supplier_id, "item_id": item_id}
         for item_id, supplier_id in supplier_item_map.items()
-    ]
-    spark.createDataFrame(rows).write.mode("append").saveAsTable(_t("env_supplier_item_map"))
+    ])
 
 
 def _write_consumer_item_map(
@@ -167,35 +246,33 @@ def _write_consumer_item_map(
     sim_id: str,
     consumer_item_map: dict[str, str],  # item_id -> consumer_id
 ) -> None:
-    rows = [
-        _Row(sim_id=sim_id, consumer_id=consumer_id, item_id=item_id)
+    _write(spark, "env_consumer_item_map", [
+        {"sim_id": sim_id, "consumer_id": consumer_id, "item_id": item_id}
         for item_id, consumer_id in consumer_item_map.items()
-    ]
-    spark.createDataFrame(rows).write.mode("append").saveAsTable(_t("env_consumer_item_map"))
+    ])
 
 
 def _write_patterns(
     spark: "SparkSession",
     sim_id: str,
-    patterns: dict[str, Pattern],  # item_id -> Pattern
+    patterns: dict[str, Pattern],
 ) -> None:
-    rows = [
-        _Row(
-            pattern_id                    = p.pattern_id,
-            sim_id                        = sim_id,
-            item_id                       = p.item_id,
-            role                          = p.role.value,
-            pattern_type                  = p.pattern_type.value,
-            distribution                  = p.distribution.value if p.distribution else None,
-            dist_params                   = json.dumps(p.dist_params) if p.dist_params else None,
-            custom_schedule               = p.custom_schedule,
-            seasonal_multiplier_schedule  = p.seasonal_multiplier_schedule,
-            noise_std                     = p.noise_std,
-            supplier_id                   = p.supplier_id,
-        )
+    _write(spark, "env_patterns", [
+        {
+            "pattern_id":                   p.pattern_id,
+            "sim_id":                       sim_id,
+            "item_id":                      p.item_id,
+            "role":                         p.role.value,
+            "pattern_type":                 p.pattern_type.value,
+            "distribution":                 p.distribution.value if p.distribution else None,
+            "dist_params":                  json.dumps(p.dist_params) if p.dist_params else None,
+            "custom_schedule":              p.custom_schedule,
+            "seasonal_multiplier_schedule": p.seasonal_multiplier_schedule,
+            "noise_std":                    p.noise_std,
+            "supplier_id":                  p.supplier_id,
+        }
         for p in patterns.values()
-    ]
-    spark.createDataFrame(rows).write.mode("append").saveAsTable(_t("env_patterns"))
+    ])
 
 
 def _write_disruptions(
@@ -204,21 +281,20 @@ def _write_disruptions(
 ) -> None:
     if not disruptions:
         return
-    rows = [
-        _Row(
-            disruption_id       = d.disruption_id,
-            sim_id              = d.sim_id,
-            item_id             = d.item_id,
-            disruption_type     = d.disruption_type.value,
-            start_tick          = d.start_tick,
-            end_tick            = d.end_tick,
-            magnitude           = d.magnitude,
-            is_stochastic       = d.is_stochastic,
-            trigger_probability = d.trigger_probability,
-        )
+    _write(spark, "env_disruption_schedule", [
+        {
+            "disruption_id":       d.disruption_id,
+            "sim_id":              d.sim_id,
+            "item_id":             d.item_id,
+            "disruption_type":     d.disruption_type.value,
+            "start_tick":          d.start_tick,
+            "end_tick":            d.end_tick,
+            "magnitude":           d.magnitude,
+            "is_stochastic":       d.is_stochastic,
+            "trigger_probability": d.trigger_probability,
+        }
         for d in disruptions
-    ]
-    spark.createDataFrame(rows).write.mode("append").saveAsTable(_t("env_disruption_schedule"))
+    ])
 
 
 # ---------------------------------------------------------------------------

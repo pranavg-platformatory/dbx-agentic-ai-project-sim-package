@@ -25,6 +25,8 @@
   - [Development Notes for `runner.py`](#development-notes-for-runnerpy)
 - [Stage 7: `viz`](#stage-7-viz)
   - [Pre-Development Notes](#pre-development-notes-5)
+    - [Why Skip the `RuleBasedAgent` for Stage 6 for Now?](#why-skip-the-rulebasedagent-for-stage-6-for-now)
+    - [Overview for Stage 7](#overview-for-stage-7)
  
 ---
 
@@ -305,4 +307,31 @@ for each tick:
 Just an orchestrator for the simulation.
 
 # Stage 7: `viz`
+[`warehouse_sim/viz`](./warehouse_sim/viz/)
+
 ## Pre-Development Notes
+### Why Skip the `RuleBasedAgent` for Stage 6 for Now?
+The `RuleBasedAgent` is functionally the least essential at this point because:
+
+- The notebook to test stage 4 already defines two inline agents (`HoldAgent`, `ReorderAgent`) (which shall be added to the `warehouse_sim/agent` sub-package) that are sufficient to drive and test the engine end-to-end
+- The `BaseAgent` contract (defined in the `warehouse_sim/agent` sub-package) is already proven - any agent, including the eventual LLM agent, just subclasses it and implements decide
+- The rule-based agent is a placeholder for the LLM agent, not a dependency of anything else in the stack
+- Stage 7 (visualisation) only needs populated `hist_*` and `ops_*` tables, which the stage 4 test notebook already produces
+
+The one thing stage 6 does add is a reusable, importable `RuleBasedAgent` that lives in the package rather than inline in a notebook - useful when you want a reproducible baseline to compare against the LLM agent later. But that's a stage 6 concern, not a stage 7 one.
+
+***So the right call is: do Stage 7 now, come back to Stage 6 when you're ready to build the LLM agent and need a clean baseline to compare it against.***
+
+### Overview for Stage 7
+Stage 7 is viz/dashboard.py - it reads purely from hist_* and ops_* tables and produces charts. No engine, no agent, no Spark writes. The key views to build:
+
+```
+1. Stock over time          ops_warehouse_state    - per item, per tick
+2. Demand vs fulfilment     hist_demand_actuals    - raw vs fulfilled vs unmet
+3. Cost breakdown           hist_cost_by_tick      - stacked by component
+4. Cumulative cost          ops_cost_accumulator   - running total per item
+5. Reorder decisions        hist_reorder_decisions - reorder vs hold over time
+6. Disruption overlay       ops_active_disruptions - highlight active ticks
+```
+
+The output will be a Databricks notebook that pulls these views and renders them with `matplotlib` or `pandas` - clean enough to present as a PoC dashboard.

@@ -28,6 +28,8 @@
     - [Why Skip the `RuleBasedAgent` for Stage 6 for Now?](#why-skip-the-rulebasedagent-for-stage-6-for-now)
     - [Overview for Stage 7](#overview-for-stage-7)
   - [Post-Development Notes](#post-development-notes-3)
+    - [Key Points](#key-points)
+    - [Completion Status](#completion-status)
  
 ---
 
@@ -338,7 +340,20 @@ Stage 7 is viz/dashboard.py - it reads purely from hist_* and ops_* tables and p
 The output will be a Databricks notebook that pulls these views and renders them with `matplotlib` or `pandas` - clean enough to present as a PoC dashboard.
 
 ## Post-Development Notes
+### Key Points
 - `SimDashboard` is lazy-loading. Each property (stock, demand, cost_by_tick etc.) hits Spark only once and caches the result as a pandas DataFrame. Calling `plot_all()` `after print_summary()` doesn't re-query the tables.
 - Disruption shading is automatic. Any chart that's per-item will shade ticks where `ops_active_disruptions.is_active_this_tick = true` in translucent red. This means the demand spike at ticks 4-6 in the stage 4 toy world will be visually obvious without any manual annotation.
-- The notebook is pointed at `sim_stage4_001` by default - the run the Stage 4 notebook produces. Changing SIM_ID at the top is all that's needed to inspect any other run.
-- Section 12 in the test notebook has three meaningful assertions beyond "does it render" - the cost consistency check (`hist_cost_by_tick sum = ops_cost_accumulator` final cumulative), the demand integrity check (`fulfilled + unmet = floor(disrupted_demand)`), and the event log completeness check. These turn the dashboard notebook into a lightweight audit as well as a visual tool.
+- The notebook is pointed at `sim_stage4_001` by default - the run the stage 4 test notebook produces. Changing `SIM_ID` at the top of the stage 7 test notebook is all that's needed to inspect any other run.
+- Section 12 in the stage 7 test notebook has three meaningful assertions beyond "does it render" - the cost consistency check (`hist_cost_by_tick sum = ops_cost_accumulator` final cumulative), the demand integrity check (`fulfilled + unmet = floor(disrupted_demand)`), and the event log completeness check. These turn the dashboard notebook into a lightweight audit as well as a visual tool.
+
+### Completion Status
+
+```
+✓ Stage 1   - Data models & config loader
+✓ Stage 2+3 - World setup & pattern sampling
+✓ Stage 5   - Event logger
+✓ Stage 4   - Tick engine (core)
+  Stage 6   - Agent contract   ← done
+              Rule-based agent ← deferred
+✓ Stage 7   - Full integration + visualisation
+```

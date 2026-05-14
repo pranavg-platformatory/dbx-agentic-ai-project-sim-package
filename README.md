@@ -17,7 +17,11 @@
 
 ## Notes on Certain Packages Used
 ### Pydantic
-Pydantic is the most widely used data validation library for Python. It enables defining models you can use (and reuse) to verify that data conforms to the format you expect before you store or process it. Pydantic supports several methods for validation, but at its base, the package uses Python type hints to ensure data conforms to a specific type, such as an integer, string, or date.
+Pydantic is the most widely used data validation library for Python. It enables defining models you can use (and reuse) to verify that data conforms to the format you expect before you store or process it. Pydantic supports several methods for validation, but at its base, the package uses Python type hints to ensure data conforms to a specific type, such as an integer, string, or date. Pydantic's BaseModel is the core component for data validation and settings management in Python, utilizing type annotations to enforce data structure, coerce types, and serialize data. By inheriting from BaseModel, classes automatically gain validation logic, JSON schema generation, and IDE support.
+
+**Usage in `warehouse_sim`**:
+
+In this package, Pydantic is used for [`warehouse_sim/config`](./warehouse_sim/config/models.py) in order to enforce type validation in the simulation configuration model (`SimConfig`, which inherits from `BaseModel`), ensuring that bad configuration values (i.e. values with wrong types or constraint mismatches) are caught before the code attempts to write to the env tables.
 
 > **References**:
 >

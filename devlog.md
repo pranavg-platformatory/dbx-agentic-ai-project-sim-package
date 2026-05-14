@@ -66,7 +66,14 @@ Concretely:
 - Neither file knows anything about the engine or the agent; they only depend on Stage 1 models
 
 ## Development Notes
+Changed [`warehouse_sim/world/setup.py`](./warehouse_sim/world/setup.py):
 
+- Old version: [`warehouse_sim/world/__recycle_bin__/setup.py`](./warehouse_sim/world/__recycle_bin__/setup.py)
+- New version: [`warehouse_sim/world/setup.py`](./warehouse_sim/world/setup.py)
+
+**Key change: Explicit DDL schemas per table**:
+
+These prevent PySpark from inferring long instead of int, missing nullability on arrays, or ambiguous boolean/double types - same class of issues seen in the Stage 1 notebook when using createDataFrame without a schema.
 
 ## Post-Development Notes
 

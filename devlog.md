@@ -353,7 +353,7 @@ The output will be a Databricks notebook that pulls these views and renders them
 ✓ Stage 2+3 - World setup & pattern sampling
 ✓ Stage 5   - Event logger
 ✓ Stage 4   - Tick engine (core)
-  Stage 6   - Agent contract   ← done
-              Rule-based agent ← deferred
+✓ Stage 6   - Agent contract
+  Stage 6   - Rule-based agent ← deferred
 ✓ Stage 7   - Full integration + visualisation
 ```

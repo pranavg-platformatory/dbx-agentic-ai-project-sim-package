@@ -20,7 +20,7 @@
 
 - [Notes on Certain Packages Used](#notes-on-certain-packages-used)
   - [Pydantic](#pydantic)
-- [`dataclasses`](#dataclasses)
+  - [`dataclasses`](#dataclasses)
 
 ## Notes on Certain Packages Used
 ### Pydantic
@@ -39,7 +39,7 @@ In this package, Pydantic is used for [`warehouse_sim/config`](./warehouse_sim/c
 > - [*Welcome to Pydantic*, **pydantic.dev/docs/validation/latest**](https://pydantic.dev/docs/validation/latest/get-started/)
 > - [*What is Pydantic? Validating Data in Python*, **prefect.io/blog**](https://www.prefect.io/blog/what-is-pydantic-validating-data-in-python)
 
-## `dataclasses`
+### `dataclasses`
 This module provides a decorator and functions for automatically adding generated special methods such as `__init__()` and `__repr__()` to user-defined classes. The member variables to use in these generated methods are defined using PEP 526 type annotations. For example, this code...
 
 ```py

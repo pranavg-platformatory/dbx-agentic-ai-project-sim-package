@@ -2,6 +2,10 @@
 
 *Simulation package for the Databricks agentic AI project.*
 
+> **Repository for ideation and planning**: [`pranavg-platformatory`/`dbx-agentic-ai-project`, **github.com**](https://github.com/pranavg-platformatory/dbx-agentic-ai-project)
+
+---
+
 <h1>Package</h1>
 
 [`warehouse_sim`](./warehouse_sim/)

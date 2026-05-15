@@ -6,6 +6,10 @@
 
 [`warehouse_sim`](./warehouse_sim/)
 
+<h1>Data Store Definition</h1>
+
+[`data_store_definition`](./data_store_definition/)
+
 <h1>Test Notebooks</h1>
 
 [`test_notebooks`](./test_notebooks/)

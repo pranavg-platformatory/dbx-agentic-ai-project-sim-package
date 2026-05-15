@@ -77,7 +77,7 @@ def evaluate_disruptions(
       - Only disruptions whose window includes this tick are considered
       - Stochastic disruptions are evaluated in disruption_id alphabetical order
       - Each stochastic disruption draws one uniform value from the shared RNG
-      - draw < trigger_probability → active; else → inactive (magnitude 0.0)
+      - draw < trigger_probability -> active; else -> inactive (magnitude 0.0)
       - Deterministic disruptions are always active within their window
 
     Returns one DisruptionActivation per in-window disruption.

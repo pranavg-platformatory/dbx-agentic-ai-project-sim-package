@@ -82,7 +82,7 @@ In practice, these two concerns are inseparable at the data level. A `Pattern` i
 More concretely:
 
 - `PatternSampler` takes a `Pattern` model as input - a Stage 1 type. It has no Databricks dependency and no awareness of the engine. So it belongs with the infra layer, not the core engine.
-- The round-trip test (write_world → load_world → sample) only makes sense as a single coherent test, not split across two notebooks.
+- The round-trip test (write_world -> load_world -> sample) only makes sense as a single coherent test, not split across two notebooks.
 - Separating them would have produced a Stage 2 notebook that wrote an incomplete world and a Stage 3 notebook that assumed patterns already existed, creating artificial sequencing friction for no gain.
 
 The split that does make sense is the one already present within the stage: `setup.py` is Databricks-aware (writes to Delta), while `patterns.py` is pure Python (no Spark). The separation of concerns is inside the module, not between stages.
@@ -128,7 +128,7 @@ Completion:
 ```
 ✓ Stage 1   - Data models & config loader
 ✓ Stage 2+3 - World setup & pattern sampling
-  Stage 5   - Event logger          ← next
+  Stage 5   - Event logger          <- next
   Stage 4   - Tick engine (core)
   Stage 6   - Agent contract + rule-based agent
   Stage 7   - Full integration + visualisation
@@ -176,7 +176,7 @@ Completion:
 ✓ Stage 1   - Data models & config loader
 ✓ Stage 2+3 - World setup & pattern sampling
 ✓ Stage 5   - Event logger
-  Stage 4   - Tick engine (core)    ← next
+  Stage 4   - Tick engine (core)    <- next
   Stage 6   - Agent contract + rule-based agent
   Stage 7   - Full integration + visualisation
 ```
@@ -224,7 +224,11 @@ engine/costs.py
 `agent/base.py` needs to exist before `runner.py` is written, because the runner's type hints reference `BaseAgent`, `AgentContext`, and `ReorderDecision`. But `agent/rule_based.py` can wait until after stage 4.
 
 ## Post-Development
-Created exactly one module: `warehouse_simagent/base.py`
+Create 3 modules:
+
+- `warehouse_simagent/base.py`
+- `warehouse_simagent/hold_agent.py`
+- `warehouse_simagent/reoder_agent.py`
 
 
 # Stage 4: `engine`
@@ -250,13 +254,13 @@ engine/
 **Tick sequence**:
 
 ```
-sub-step 0   disruptions.py   evaluate stochastic disruptions → ops_active_disruptions
-sub-step 1   supply.py        arrive pending orders → update ops_pending_orders
-sub-step 2   demand.py        draw demand from pattern → hist_demand_actuals
+sub-step 0   disruptions.py   evaluate stochastic disruptions -> ops_active_disruptions
+sub-step 1   supply.py        arrive pending orders -> update ops_pending_orders
+sub-step 2   demand.py        draw demand from pattern -> hist_demand_actuals
 sub-step 3a  state.py         stock += arrived supply
-sub-step 3b  state.py         stock -= fulfilled demand (floor 0) → ops_warehouse_state
-sub-step 4   agent.decide()   reorder or hold → hist_reorder_decisions, ops_pending_orders
-sub-step 5   costs.py         accumulate costs → ops_cost_accumulator, hist_cost_by_tick
+sub-step 3b  state.py         stock -= fulfilled demand (floor 0) -> ops_warehouse_state
+sub-step 4   agent.decide()   reorder or hold -> hist_reorder_decisions, ops_pending_orders
+sub-step 5   costs.py         accumulate costs -> ops_cost_accumulator, hist_cost_by_tick
 sub-step 6   event_log        COST_ACCRUED, tick-level events already fired inline
 ```
 
@@ -291,18 +295,18 @@ Just `runner.py` - the loop itself. All the hard logic is already in the sub-mod
 ```
 for each tick:
     fire TICK_STARTED
-    [0] evaluate_disruptions()    → write_activations()
-    [1] process_arrivals()        → update_order_status(), write_arrivals()
+    [0] evaluate_disruptions()    -> write_activations()
+    [1] process_arrivals()        -> update_order_status(), write_arrivals()
     [3a] apply_arrivals()         on stock states
-    [2] draw_demand()             → write_demand_actuals()
+    [2] draw_demand()             -> write_demand_actuals()
     [3b] apply_demand()           on stock states
          write_warehouse_state()
-    [4] build AgentContext        → agent.decide()
+    [4] build AgentContext        -> agent.decide()
         for each decision:
-            if reorder → place_order(), write_placed_order()
+            if reorder -> place_order(), write_placed_order()
             write hist_reorder_decisions
-    [5] accumulate costs          → write_cost_accumulator(), write_cost_by_tick()
-    [6] fire events               → event_log
+    [5] accumulate costs          -> write_cost_accumulator(), write_cost_by_tick()
+    [6] fire events               -> event_log
     fire TICK_ENDED
 ```
 
@@ -326,7 +330,7 @@ The one thing stage 6 does add is a reusable, importable `RuleBasedAgent` that l
 ***So the right call is: do Stage 7 now, come back to Stage 6 when you're ready to build the LLM agent and need a clean baseline to compare it against.***
 
 ### Overview for Stage 7
-Stage 7 is viz/dashboard.py - it reads purely from hist_* and ops_* tables and produces charts. No engine, no agent, no Spark writes. The key views to build:
+Stage 7 is viz/dashboard.py - it reads purely from `hist_*` and `ops_*` tables and produces charts. No engine, no agent, no Spark writes. The key views to build:
 
 ```
 1. Stock over time          ops_warehouse_state    - per item, per tick
@@ -354,6 +358,6 @@ The output will be a Databricks notebook that pulls these views and renders them
 ✓ Stage 5   - Event logger
 ✓ Stage 4   - Tick engine (core)
 ✓ Stage 6   - Agent contract
-  Stage 6   - Rule-based agent ← deferred
+  Stage 6   - Rule-based agent <- deferred
 ✓ Stage 7   - Full integration + visualisation
 ```

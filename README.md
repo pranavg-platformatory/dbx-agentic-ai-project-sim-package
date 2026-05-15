@@ -6,6 +6,10 @@
 
 [`warehouse_sim`](./warehouse_sim/)
 
+<h1>Test Notebooks</h1>
+
+[`test_notebooks`](./test_notebooks/)
+
 <h1>Devlog</h1>
 
 [`devlog.md`](./devlog.md)

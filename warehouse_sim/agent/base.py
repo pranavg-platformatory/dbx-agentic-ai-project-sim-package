@@ -161,8 +161,8 @@ class ReorderDecision:
                 optional for rule-based agents)
 
     Constraints (enforced by the engine, not here):
-      - order_qty == 0  →  decision logged as HOLD
-      - order_qty >  0  →  decision logged as REORDER
+      - order_qty == 0  ->  decision logged as HOLD
+      - order_qty >  0  ->  decision logged as REORDER
       - order_qty must satisfy min_order_qty <= order_qty <= max_order_qty
         when > 0
     """

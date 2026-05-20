@@ -4,10 +4,10 @@ warehouse_sim/eventlog/event_log.py
 Append-only event writer for the simulation event log.
 
 Provides a typed `EventLogger` class with one method per event type.
-The engine calls these methods directly — it never constructs raw dicts.
+The engine calls these methods directly - it never constructs raw dicts.
 No simulation logic lives here; this is pure serialisation and I/O.
 
-No Databricks dependency at import time — PySpark is imported lazily
+No Databricks dependency at import time - PySpark is imported lazily
 inside `_write` so this module is testable without a Spark session.
 
 Usage:
@@ -35,7 +35,7 @@ CATALOG    = "hackathon_of_the_century"
 EVENTLOG   = f"{CATALOG}.tables4eventlog"
 TABLE      = f"{EVENTLOG}.event_log"
 
-# Explicit schema — avoids PySpark type inference issues (same lesson as setup.py)
+# Explicit schema - avoids PySpark type inference issues (same lesson as setup.py)
 _SCHEMA = """
     event_id   STRING,
     sim_id     STRING,
@@ -47,7 +47,7 @@ _SCHEMA = """
     logged_at  TIMESTAMP
 """
 
-# Valid event types — matches spec section 7
+# Valid event types - matches spec section 7
 EVENT_TYPES = frozenset({
     "SIM_STARTED",
     "SIM_ENDED",
@@ -121,7 +121,7 @@ class EventLogger:
     Typed event writer. One instance per simulation run.
     Each public method corresponds to one event type in the spec.
 
-    The engine imports and calls this — the logger never calls the engine.
+    The engine imports and calls this - the logger never calls the engine.
     """
 
     def __init__(self, spark: "SparkSession", sim_id: str) -> None:
@@ -382,7 +382,7 @@ class EventLogger:
 
 
 # ---------------------------------------------------------------------------
-# Standalone row builder (no Spark — used by tests and engine internals)
+# Standalone row builder (no Spark - used by tests and engine internals)
 # ---------------------------------------------------------------------------
 
 def build_event_row(

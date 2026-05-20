@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
 
 # ---------------------------------------------------------------------------
-# Colour palette — consistent across all charts
+# Colour palette - consistent across all charts
 # ---------------------------------------------------------------------------
 
 ITEM_COLOURS = [
@@ -233,13 +233,13 @@ class SimDashboard:
             # (read from decisions table if available)
             rp_rows = self.decisions[self.decisions["item_id"] == item_id]
             if not rp_rows.empty:
-                # reorder point not stored here — annotate reorder events instead
+                # reorder point not stored here - annotate reorder events instead
                 reorder_ticks = rp_rows[rp_rows["decision"] == "reorder"]["tick"]
                 for rt in reorder_ticks:
                     ax.axvline(rt, color=REORDER_COLOUR, lw=1, ls=":", alpha=0.7)
 
             self._shade_disruptions(ax, item_id)
-            self._style(ax, f"{item_id} — Stock", ylabel="Units")
+            self._style(ax, f"{item_id} - Stock", ylabel="Units")
 
         fig.tight_layout()
         return fig
@@ -281,7 +281,7 @@ class SimDashboard:
                             label="Unmet (stockout)")
 
             self._shade_disruptions(ax, item_id)
-            self._style(ax, f"{item_id} — Demand", ylabel="Units")
+            self._style(ax, f"{item_id} - Demand", ylabel="Units")
 
         fig.tight_layout()
         return fig
@@ -325,7 +325,7 @@ class SimDashboard:
                 bottoms = [b + v for b, v in zip(bottoms, vals)]
 
             self._shade_disruptions(ax, item_id)
-            self._style(ax, f"{item_id} — Cost Per Tick", ylabel="Cost (£)")
+            self._style(ax, f"{item_id} - Cost Per Tick", ylabel="Cost (£)")
 
         fig.tight_layout()
         return fig
@@ -355,7 +355,7 @@ class SimDashboard:
             if not budget_vals.empty:
                 # budget_limit = remaining + spent; use first row's remaining + cum_total
                 first = self.cost_cumulative.sort_values("tick").iloc[0]
-                # Approximate budget_limit from config — show initial remaining_budget
+                # Approximate budget_limit from config - show initial remaining_budget
                 initial_budget = self.cost_cumulative.sort_values("tick") \
                                      .groupby("item_id")["remaining_budget"].first()
                 # Show the global remaining_budget line from the last tick
@@ -416,7 +416,7 @@ class SimDashboard:
             ax2.spines["top"].set_visible(False)
 
             self._shade_disruptions(ax, item_id)
-            self._style(ax, f"{item_id} — Decisions", ylabel="Order Qty")
+            self._style(ax, f"{item_id} - Decisions", ylabel="Order Qty")
 
             # Combined legend
             handles1, labels1 = ax.get_legend_handles_labels()

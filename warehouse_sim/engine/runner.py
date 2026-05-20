@@ -2,7 +2,7 @@
 warehouse_sim/engine/runner.py
 
 The simulation tick loop. Orchestrates all sub-modules in the correct
-sequence per tick. This file contains no simulation logic of its own —
+sequence per tick. This file contains no simulation logic of its own -
 it only calls the sub-modules in order and passes data between them.
 
 The agent and event logger are injected at construction time.
@@ -23,8 +23,6 @@ Usage:
 
 from __future__ import annotations
 
-import uuid
-from datetime import datetime, timezone
 from typing import Optional, TYPE_CHECKING
 
 from ..config.models import RunMode, SimWorld
@@ -89,17 +87,17 @@ CATALOG = "hackathon_of_the_century"
 _DECISIONS_TABLE  = f"{CATALOG}.tables4hist.hist_reorder_decisions"
 
 _DECISIONS_SCHEMA = """
-    sim_id                    STRING,
-    tick                      INT,
-    item_id                   STRING,
-    supplier_id               STRING,
-    stock_on_hand_at_decision INT,
+    sim_id                       STRING,
+    tick                         INT,
+    item_id                      STRING,
+    supplier_id                  STRING,
+    stock_on_hand_at_decision    INT,
     stock_in_transit_at_decision INT,
-    decision                  STRING,
-    order_qty                 INT,
-    order_id                  STRING,
-    agent_reasoning           STRING,
-    agent_version             STRING
+    decision                     STRING,
+    order_qty                    INT,
+    order_id                     STRING,
+    agent_reasoning              STRING,
+    agent_version                STRING
 """
 
 
@@ -115,7 +113,7 @@ class SimRunner:
     ----------
     spark   : active SparkSession
     world   : fully loaded SimWorld (from load_world)
-    agent   : any BaseAgent subclass — injected, never imported directly
+    agent   : any BaseAgent subclass - injected, never imported directly
     logger  : EventLogger instance for this sim run
     sampler : PatternSampler seeded with world.config.random_seed
     """
@@ -136,12 +134,12 @@ class SimRunner:
         self._sim_id  = world.config.sim_id
         self._config  = world.config
 
-        # In-memory state — initialised in run()
+        # In-memory state - initialised in run()
         self._stock_states: dict[str, StockState] = {}
         self._cost_states:  dict[str, CostState]  = {}
         self._remaining_budget: Optional[float]   = world.config.budget_limit
 
-        # Budget warning guard — fire BUDGET_WARNING only once per crossing
+        # Budget warning guard - fire BUDGET_WARNING only once per crossing
         self._budget_warning_fired: bool = False
 
         # Totals for SIM_ENDED
@@ -337,7 +335,7 @@ class SimRunner:
 
                 # Budget check
                 if not check_budget(self._remaining_budget, order_cost):
-                    # Cannot afford — log as hold
+                    # Cannot afford - log as hold
                     self._logger.reorder_held(
                         tick=tick, item_id=item_id,
                         stock_on_hand=self._stock_states[item_id].stock_on_hand,
@@ -433,7 +431,7 @@ class SimRunner:
             # Find unmet demand for this item this tick
             unmet   = next((r.unmet for r in demand_results if r.item_id == item_id), 0)
 
-            # Transit loss cost — charged at arrival
+            # Transit loss cost - charged at arrival
             lost    = lost_by_item.get(item_id, 0)
 
             h = compute_holding_cost(stock, item)

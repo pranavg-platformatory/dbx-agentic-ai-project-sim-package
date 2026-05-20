@@ -9,7 +9,7 @@ Responsibilities:
   - Write one row per item per tick (append-only)
 
 The stock value written reflects both sub-step 3a (arrivals) and 3b
-(demand depletion) — this is what the agent sees in sub-step 4.
+(demand depletion) - this is what the agent sees in sub-step 4.
 
 No agent dependency.
 """
@@ -60,7 +60,7 @@ class StockState:
 
 
 # ---------------------------------------------------------------------------
-# Core logic (pure Python — no Spark)
+# Core logic (pure Python - no Spark)
 # ---------------------------------------------------------------------------
 
 def apply_arrivals(state: StockState, arrived_qty: int) -> None:
@@ -75,7 +75,7 @@ def apply_arrivals(state: StockState, arrived_qty: int) -> None:
 def apply_demand(state: StockState, fulfilled: int) -> None:
     """
     Sub-step 3b: decrease stock by fulfilled demand.
-    Floored at 0 — stock never goes negative.
+    Floored at 0 - stock never goes negative.
     Mutates state in place.
     """
     state.stock_on_hand = max(0, state.stock_on_hand - fulfilled)
@@ -96,12 +96,12 @@ def apply_new_order(state: StockState, order_qty: int) -> None:
 def initialise_states(
     spark:  "SparkSession",
     sim_id: str,
-    world,                     # SimWorld — avoids circular import
+    world,                     # SimWorld - avoids circular import
 ) -> dict[str, StockState]:
     """
     Build the tick-0 stock state for all items from env_item_types.initial_stock.
     Called once by the runner before the loop starts.
-    Does NOT write to ops_warehouse_state — the runner does that at tick 0.
+    Does NOT write to ops_warehouse_state - the runner does that at tick 0.
     """
     states: dict[str, StockState] = {}
     for item_id, item in world.items.items():

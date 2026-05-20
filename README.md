@@ -89,4 +89,4 @@ def __init__(self, name: str, unit_price: float, quantity_on_hand: int = 0):
 
 ---
 
-> **Reference**: [`dataclasses` — Data Classes, **docs.python.org/3/library**](https://docs.python.org/3/library/dataclasses.html)
+> **Reference**: [`dataclasses` - Data Classes, **docs.python.org/3/library**](https://docs.python.org/3/library/dataclasses.html)

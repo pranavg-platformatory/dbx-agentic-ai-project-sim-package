@@ -3,7 +3,7 @@ warehouse_sim/config/loader.py
 
 Reads all env tables for a given sim_id from Databricks and assembles
 a fully typed SimWorld object. The only Databricks-aware file in the
-infra layer — everything else works with plain Python objects.
+infra layer - everything else works with plain Python objects.
 
 Usage (in a Databricks notebook or job):
     from warehouse_sim.config.loader import load_world
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
 
 # ---------------------------------------------------------------------------
-# Catalog / schema constants — adjust if your Databricks paths differ
+# Catalog / schema constants - adjust if your Databricks paths differ
 # ---------------------------------------------------------------------------
 
 CATALOG = "hackathon_of_the_century"
@@ -93,7 +93,7 @@ def load_world(spark: "SparkSession", sim_id: str) -> SimWorld:
     # -- Items ---------------------------------------------------------------
     raw_items = _rows(spark, _table("env_item_types"), sim_id=sim_id)
     # env_item_types has no sim_id column; fetch all and index by item_id
-    # (items are shared across runs — the mapping tables scope them per sim)
+    # (items are shared across runs - the mapping tables scope them per sim)
     all_item_rows = [row.asDict() for row in spark.table(_table("env_item_types")).collect()]
     items: dict[str, ItemType] = {r["item_id"]: ItemType(**r) for r in all_item_rows}
 

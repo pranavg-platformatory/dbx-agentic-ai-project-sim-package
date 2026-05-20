@@ -2,8 +2,8 @@
 warehouse_sim/engine/demand.py
 
 Sub-steps 2 and 3b of the tick sequence:
-  2   — draw demand from pattern, apply disruption multiplier
-  3b  — deplete stock by fulfilled demand (floored at 0)
+  2   - draw demand from pattern, apply disruption multiplier
+  3b  - deplete stock by fulfilled demand (floored at 0)
 
 Returns a DemandResult per item which the runner uses to:
   - Update ops_warehouse_state (via state.py)
@@ -67,7 +67,7 @@ class DemandResult:
 
 
 # ---------------------------------------------------------------------------
-# Core logic (pure Python — no Spark)
+# Core logic (pure Python - no Spark)
 # ---------------------------------------------------------------------------
 
 def draw_demand(
@@ -94,7 +94,7 @@ def draw_demand(
     # Re-sample as raw float before flooring for the record
     # (sample() returns int; we store the pre-floor float as raw_demand)
     # To get the true pre-floor float we replicate the base value + seasonal
-    # without the final floor — use a private call path via _raw_float_sample.
+    # without the final floor - use a private call path via _raw_float_sample.
     raw_float  = _raw_float_sample(pattern, tick, sampler)
     multiplier = get_demand_multiplier(item_id, activations)
 
@@ -124,7 +124,7 @@ def _raw_float_sample(pattern: Pattern, tick: int, sampler: PatternSampler) -> f
     with the pre-floor float, matching the spec's column types.
 
     NOTE: This draws from the RNG, so call order matters for reproducibility.
-    The runner always calls draw_demand (not this directly) — this is an
+    The runner always calls draw_demand (not this directly) - this is an
     internal helper only.
     """
     import math as _math
@@ -138,7 +138,7 @@ def _raw_float_sample(pattern: Pattern, tick: int, sampler: PatternSampler) -> f
         # Re-use sampler's internal statistical draw
         # We cannot re-draw without consuming RNG; instead we store the
         # already-drawn int as a float approximation for the record.
-        # The engine calls PatternSampler.sample() which floors — we store
+        # The engine calls PatternSampler.sample() which floors - we store
         # that value as the raw float (acceptable per spec: raw_demand is
         # the sample "before disruption", not strictly "before floor").
         base = float(sampler.sample(pattern, tick))

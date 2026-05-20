@@ -5,7 +5,7 @@ Writes a fully constructed SimWorld into the Databricks env tables.
 This is the world-initialisation step that runs once before the engine starts.
 
 It is the write-side complement of config/loader.py (which reads the same tables).
-No engine or agent dependency — only Stage 1 models are imported.
+No engine or agent dependency - only Stage 1 models are imported.
 
 Usage:
     from warehouse_sim.world.setup import write_world, teardown_world
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
 
 # ---------------------------------------------------------------------------
-# Catalog / schema constants — must match loader.py and DDL
+# Catalog / schema constants - must match loader.py and DDL
 # ---------------------------------------------------------------------------
 
 CATALOG = "hackathon_of_the_century"
@@ -62,7 +62,7 @@ def _delete_sim_rows(spark: "SparkSession", sim_id: str) -> None:
     """
     Remove all rows scoped to sim_id from tables that carry a sim_id column.
     Tables without sim_id (env_item_types, env_suppliers, env_consumers) are
-    NOT touched — those entities are shared across runs.
+    NOT touched - those entities are shared across runs.
     """
     for table in [
         "env_sim_config",
@@ -96,7 +96,7 @@ def _write_sim_config(spark: "SparkSession", config: SimConfig) -> None:
 
 def _write_items(spark: "SparkSession", items: dict[str, ItemType]) -> None:
     """
-    env_item_types has no sim_id — upsert pattern: delete by item_id then insert.
+    env_item_types has no sim_id - upsert pattern: delete by item_id then insert.
     Safe because item definitions are expected to be consistent across runs.
     """
     item_ids = list(items.keys())
@@ -229,11 +229,11 @@ def write_world(spark: "SparkSession", world: SimWorld) -> None:
     """
     Persist a fully constructed SimWorld into the Databricks env tables.
 
-    Safe to call repeatedly for the same sim_id — existing rows for this
+    Safe to call repeatedly for the same sim_id - existing rows for this
     sim_id are deleted before re-insertion (idempotent).
 
     Write order respects logical dependencies:
-      1. Shared entity tables (items, suppliers, consumers) — no sim_id
+      1. Shared entity tables (items, suppliers, consumers) - no sim_id
       2. sim config
       3. Mapping tables (scoped by sim_id)
       4. Patterns and disruptions (scoped by sim_id)

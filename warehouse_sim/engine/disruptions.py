@@ -6,7 +6,7 @@ this tick and write to ops_active_disruptions.
 
 Deterministic disruptions are always active within their window.
 Stochastic disruptions draw from the shared RNG (via PatternSampler.draw_uniform)
-in disruption_id alphabetical order — required for reproducibility (FR-07).
+in disruption_id alphabetical order - required for reproducibility (FR-07).
 
 Multiple disruptions of the same type on the same item are multiplied
 together (spec FR-06 suggestion).
@@ -62,7 +62,7 @@ class DisruptionActivation:
 
 
 # ---------------------------------------------------------------------------
-# Core logic (pure Python — no Spark)
+# Core logic (pure Python - no Spark)
 # ---------------------------------------------------------------------------
 
 def evaluate_disruptions(

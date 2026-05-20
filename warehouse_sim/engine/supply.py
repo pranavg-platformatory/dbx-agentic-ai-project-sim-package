@@ -9,7 +9,7 @@ For each order whose expected_arrival_tick == current tick:
   - Update ops_pending_orders status
   - Write to hist_supply_arrivals
 
-Also provides place_order() — called at sub-step 4 by the runner when the
+Also provides place_order() - called at sub-step 4 by the runner when the
 agent decides to reorder. Computes effective lead time (with disruption
 multiplier and floor), inserts into ops_pending_orders.
 
@@ -95,7 +95,7 @@ class PlacedOrder:
 
 
 # ---------------------------------------------------------------------------
-# Core logic (pure Python — no Spark)
+# Core logic (pure Python - no Spark)
 # ---------------------------------------------------------------------------
 
 def process_arrivals(
@@ -170,7 +170,7 @@ def place_order(
       actual    = max(1, round(Normal(base_lead_time_ticks, lead_time_variability)))
       effective = actual × max(1.0, lead_time_multiplier)
 
-    Returns a PlacedOrder — the runner writes it to ops_pending_orders.
+    Returns a PlacedOrder - the runner writes it to ops_pending_orders.
     """
     actual_lt    = sampler.sample_lead_time(base_lead_time_ticks, lead_time_variability)
     lt_mult      = get_lead_time_multiplier(item_id, activations)

@@ -12,7 +12,7 @@ Supports:
   - Gaussian noise
   - Deterministic output via a seeded numpy RNG
 
-No Databricks dependency — pure Python / numpy.
+No Databricks dependency - pure Python / numpy.
 
 Usage:
     from warehouse_sim.world.patterns import PatternSampler
@@ -35,8 +35,8 @@ class PatternSampler:
 
     A single shared instance should be created at simulation startup and
     passed through to every component that needs to draw samples.
-    This guarantees that the global draw order — and therefore
-    reproducibility — is controlled by the caller (engine/runner.py).
+    This guarantees that the global draw order - and therefore
+    reproducibility - is controlled by the caller (engine/runner.py).
     """
 
     def __init__(self, seed: int) -> None:

@@ -86,7 +86,7 @@ class CostState:
 
 
 # ---------------------------------------------------------------------------
-# Per-component cost calculators (pure Python — no Spark)
+# Per-component cost calculators (pure Python - no Spark)
 # ---------------------------------------------------------------------------
 
 def compute_holding_cost(stock_on_hand: int, item: ItemType) -> float:

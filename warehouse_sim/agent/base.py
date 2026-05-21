@@ -108,7 +108,7 @@ class AgentContext:
     '''
     The complete read-only snapshot delivered to the agent at sub-step 4 of each tick, after arrivals (3a) and demand depletion (3b).
     
-    For reference, the simulation loop has the following steps per tick:
+    For reference, the simulation loop has the following tick sequence, i.e. steps per tick:
 
     ```
     SIMULATION LOOP (per tick)

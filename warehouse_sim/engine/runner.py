@@ -1,24 +1,48 @@
 '''
 warehouse_sim/engine/runner.py
 
-The simulation tick loop. Orchestrates all sub-modules in the correct
-sequence per tick. This file contains no simulation logic of its own -
-it only calls the sub-modules in order and passes data between them.
+The simulation tick loop:
+- Orchestrates all sub-modules in the correct sequence per tick
+- This file contains no simulation logic of its own
+- Instead, it only calls the sub-modules in order and passes data between them
 
-The agent and event logger are injected at construction time.
-The runner never imports a concrete agent implementation.
+For reference, the simulation loop has the following tick sequence, i.e. steps per tick:
+
+```
+SIMULATION LOOP (per tick)
+│
+├── [0] Evaluate stochastic disruptions → ops_active_disruptions
+├── [1] Process supply arrivals         → ops_pending_orders (update), ops_warehouse_state
+├── [2] Draw demand                     → hist_demand_actuals
+├── [3a] Apply arrivals to stock      ┐
+├── [3b] Apply demand to stock        ┘ → ops_warehouse_state
+├── [4] Agent decides                   → hist_reorder_decisions, ops_pending_orders (insert)
+├── [5] Accumulate costs                → ops_cost_accumulator, hist_cost_by_tick
+└── [6] Write event log                 → event_log
+    The engine builds this once per tick and passes it to agent.decide().
+    The agent must not mutate it.
+```
+
+---
+
+KEY POINTS:
+- The agent (warehouse_sim/agent) and event logger (warehouse_sim/event_logger) are injected at construction time
+- The runner never imports a concrete agent implementation
 
 Usage:
-    from warehouse_sim.engine.runner import SimRunner
-    from warehouse_sim.agent.rule_based import RuleBasedAgent
 
-    world   = load_world(spark, sim_id)
-    sampler = PatternSampler(seed=world.config.random_seed)
-    logger  = EventLogger(spark, sim_id=world.config.sim_id)
-    agent   = RuleBasedAgent()
+```
+from warehouse_sim.engine.runner import SimRunner
+from warehouse_sim.agent.rule_based import RuleBasedAgent
 
-    runner  = SimRunner(spark, world, agent, logger, sampler)
-    runner.run()
+world   = load_world(spark, sim_id)
+sampler = PatternSampler(seed=world.config.random_seed)
+logger  = EventLogger(spark, sim_id=world.config.sim_id)
+agent   = RuleBasedAgent()
+
+runner  = SimRunner(spark, world, agent, logger, sampler)
+runner.run()
+```
 '''
 
 from __future__ import annotations

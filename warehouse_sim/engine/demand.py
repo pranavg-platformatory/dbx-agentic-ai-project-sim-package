@@ -1,16 +1,39 @@
 '''
 warehouse_sim/engine/demand.py
 
-Sub-steps 2 and 3b of the tick sequence:
-  2   - draw demand from pattern, apply disruption multiplier
-  3b  - deplete stock by fulfilled demand (floored at 0)
+Sub-steps 2 and 3b of the tick sequence (see reference below):
+- 2  - draw demand from pattern, apply disruption multiplier
+- 3b - deplete stock by fulfilled demand (floored at 0)
+
+For reference, the simulation loop has the following tick sequence, i.e. steps per tick:
+
+```
+SIMULATION LOOP (per tick)
+│
+├── [0] Evaluate stochastic disruptions → ops_active_disruptions
+├── [1] Process supply arrivals         → ops_pending_orders (update), ops_warehouse_state
+├── [2] Draw demand                     → hist_demand_actuals
+├── [3a] Apply arrivals to stock      ┐
+├── [3b] Apply demand to stock        ┘ → ops_warehouse_state
+├── [4] Agent decides                   → hist_reorder_decisions, ops_pending_orders (insert)
+├── [5] Accumulate costs                → ops_cost_accumulator, hist_cost_by_tick
+└── [6] Write event log                 → event_log
+    The engine builds this once per tick and passes it to agent.decide().
+    The agent must not mutate it.
+```
+
+---
+
+KEY POINTS:
 
 Returns a DemandResult per item which the runner uses to:
-  - Update ops_warehouse_state (via state.py)
-  - Write hist_demand_actuals
-  - Fire DEMAND_DRAWN and STOCKOUT_OCCURRED events
+- Update ops_warehouse_state (via state.py)
+- Write hist_demand_actuals
+- Fire `DEMAND_DRAWN` and `STOCKOUT_OCCURRED` events
 
-No agent dependency.
+---
+
+NOTE: No agent dependency.
 '''
 
 from __future__ import annotations

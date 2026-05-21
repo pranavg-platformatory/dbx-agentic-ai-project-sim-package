@@ -1,19 +1,39 @@
 '''
 warehouse_sim/engine/supply.py
 
-Sub-step 1 of the tick sequence: process pending order arrivals.
+Sub-step 1 of the tick sequence (see reference below): process pending order arrivals.
 
-For each order whose expected_arrival_tick == current tick:
-  - Apply transit loss fraction (if any active transit_loss disruption)
-  - Compute arrived_qty and lost_qty
-  - Update ops_pending_orders status
-  - Write to hist_supply_arrivals
+For reference, the simulation loop has the following tick sequence, i.e. steps per tick:
 
-Also provides place_order() - called at sub-step 4 by the runner when the
-agent decides to reorder. Computes effective lead time (with disruption
-multiplier and floor), inserts into ops_pending_orders.
+```
+SIMULATION LOOP (per tick)
+│
+├── [0] Evaluate stochastic disruptions → ops_active_disruptions
+├── [1] Process supply arrivals         → ops_pending_orders (update), ops_warehouse_state
+├── [2] Draw demand                     → hist_demand_actuals
+├── [3a] Apply arrivals to stock      ┐
+├── [3b] Apply demand to stock        ┘ → ops_warehouse_state
+├── [4] Agent decides                   → hist_reorder_decisions, ops_pending_orders (insert)
+├── [5] Accumulate costs                → ops_cost_accumulator, hist_cost_by_tick
+└── [6] Write event log                 → event_log
+    The engine builds this once per tick and passes it to agent.decide().
+    The agent must not mutate it.
+```
 
-No agent dependency.
+---
+
+KEY POINTS:
+- For each order whose `expected_arrival_tick` == current tick:
+    - Apply transit loss fraction (if any active transit_loss disruption)
+    - Compute `arrived_qty` and `lost_qty`
+    - Update table "ops_pending_orders" status
+    - Write to table "hist_supply_arrivals"
+- Also provides `place_order()` - called at sub-step 4 by the runner when the agent decides to reorder
+- Computes effective lead time (with disruption multiplier and floor), inserts into "ops_pending_orders"
+
+---
+
+NOTE: No agent dependency.
 '''
 
 from __future__ import annotations

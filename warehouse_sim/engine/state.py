@@ -1,17 +1,39 @@
 '''
 warehouse_sim/engine/state.py
 
-Warehouse state reads and writes for ops_warehouse_state.
+Warehouse state reads and writes for the table "ops_warehouse_state".
 
 Responsibilities:
-  - Initialise tick-0 state from env_item_types.initial_stock
-  - Read current stock for all items (MAX(tick) per item)
-  - Write one row per item per tick (append-only)
+- Initialise tick-0 state from the field `initial_stock` in "env_item_types"
+- Read current stock for all items (MAX(tick) per item)
+- Write one row per item per tick (append-only)
 
-The stock value written reflects both sub-step 3a (arrivals) and 3b
-(demand depletion) - this is what the agent sees in sub-step 4.
+For reference, the simulation loop has the following tick sequence, i.e. steps per tick:
 
-No agent dependency.
+```
+SIMULATION LOOP (per tick)
+│
+├── [0] Evaluate stochastic disruptions → ops_active_disruptions
+├── [1] Process supply arrivals         → ops_pending_orders (update), ops_warehouse_state
+├── [2] Draw demand                     → hist_demand_actuals
+├── [3a] Apply arrivals to stock      ┐
+├── [3b] Apply demand to stock        ┘ → ops_warehouse_state
+├── [4] Agent decides                   → hist_reorder_decisions, ops_pending_orders (insert)
+├── [5] Accumulate costs                → ops_cost_accumulator, hist_cost_by_tick
+└── [6] Write event log                 → event_log
+    The engine builds this once per tick and passes it to agent.decide().
+    The agent must not mutate it.
+```
+
+---
+
+KEY POINTS:
+- The stock value written reflects both sub-step 3a (arrivals) and 3b (demand depletion)
+- This is what the agent sees in sub-step 4
+
+---
+
+NOTE: No agent dependency.
 '''
 
 from __future__ import annotations

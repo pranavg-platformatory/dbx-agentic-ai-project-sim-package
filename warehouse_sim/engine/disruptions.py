@@ -4,14 +4,33 @@ warehouse_sim/engine/disruptions.py
 Sub-step 0 of the tick sequence: evaluate which disruptions are active
 this tick and write to ops_active_disruptions.
 
-Deterministic disruptions are always active within their window.
-Stochastic disruptions draw from the shared RNG (via PatternSampler.draw_uniform)
-in disruption_id alphabetical order - required for reproducibility (FR-07).
+For reference, the simulation loop has the following tick sequence, i.e. steps per tick:
 
-Multiple disruptions of the same type on the same item are multiplied
-together (spec FR-06 suggestion).
+```
+SIMULATION LOOP (per tick)
+│
+├── [0] Evaluate stochastic disruptions → ops_active_disruptions
+├── [1] Process supply arrivals         → ops_pending_orders (update), ops_warehouse_state
+├── [2] Draw demand                     → hist_demand_actuals
+├── [3a] Apply arrivals to stock      ┐
+├── [3b] Apply demand to stock        ┘ → ops_warehouse_state
+├── [4] Agent decides                   → hist_reorder_decisions, ops_pending_orders (insert)
+├── [5] Accumulate costs                → ops_cost_accumulator, hist_cost_by_tick
+└── [6] Write event log                 → event_log
+    The engine builds this once per tick and passes it to agent.decide().
+    The agent must not mutate it.
+```
 
-No agent or runner dependency.
+---
+
+KEY POINTS:
+- Deterministic disruptions are always active within their window
+- Stochastic disruptions draw from the shared RNG (via PatternSampler.draw_uniform) in `disruption_id` alphabetical order - required for reproducibility (spec FR-07, __docs__/simulationSpecs.md)
+- Multiple disruptions of the same type on the same item are multiplied together (spec FR-06 suggestion, __docs__/simulationSpecs.md)
+
+---
+
+NOTE: No agent or runner dependency.
 '''
 
 from __future__ import annotations

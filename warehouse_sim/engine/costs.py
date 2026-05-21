@@ -1,18 +1,42 @@
 '''
 warehouse_sim/engine/costs.py
 
-Sub-step 5 of the tick sequence: accumulate costs and write to
-ops_cost_accumulator and hist_cost_by_tick.
+Sub-step 5 of the tick sequence (see reference below):
+- Accumulate costs for the warehouse across items
+- Write to the tables "ops_cost_accumulator" and "hist_cost_by_tick"
 
-Cost components per tick (spec section 3.7):
-  holding      = stock_on_hand (end of tick) × holding_cost_per_unit_per_tick
-  stockout     = unmet_demand × stockout_cost_per_unit_per_tick
-  order        = order_fixed_cost + (order_qty × order_variable_cost_per_unit)
-                 charged at placement; 0 if no order placed this tick
-  transit_loss = lost_qty × transit_loss_cost_per_unit
-                 charged at arrival; 0 if no transit loss this tick
+For reference, the simulation loop has the following tick sequence, i.e. steps per tick:
 
-No agent dependency.
+```
+SIMULATION LOOP (per tick)
+│
+├── [0] Evaluate stochastic disruptions → ops_active_disruptions
+├── [1] Process supply arrivals         → ops_pending_orders (update), ops_warehouse_state
+├── [2] Draw demand                     → hist_demand_actuals
+├── [3a] Apply arrivals to stock      ┐
+├── [3b] Apply demand to stock        ┘ → ops_warehouse_state
+├── [4] Agent decides                   → hist_reorder_decisions, ops_pending_orders (insert)
+├── [5] Accumulate costs                → ops_cost_accumulator, hist_cost_by_tick
+└── [6] Write event log                 → event_log
+    The engine builds this once per tick and passes it to agent.decide().
+    The agent must not mutate it.
+```
+
+---
+
+KEY POINTS:
+
+Cost components per tick (spec section 3.7, __docs__/simulationSpecs.md):
+- `holding`      = `stock_on_hand` (end of tick) × `holding_cost_per_unit_per_tick`
+- `stockout`     = `unmet_demand` × `stockout_cost_per_unit_per_tick`
+- `order`        = `order_fixed_cost` + (`order_qty` × `order_variable_cost_per_unit`) \n
+                   NOTE: Charged at placement; 0 if no order placed this tick
+- `transit_loss` = `lost_qty` × `transit_loss_cost_per_unit` \n
+                   NOTE: Charged at arrival; 0 if no transit loss this tick
+
+---
+
+NOTE: No agent dependency.
 '''
 
 from __future__ import annotations

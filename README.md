@@ -6,21 +6,23 @@
 
 ---
 
-<h1>Package</h1>
+> **NOTE: Naming convention**:
+>
+> - Python packages and modules: underscore-separated lowercase
+> - Other directories/files: camel-case
+> - Adjacent (non-package) directories/files: camel-case with a preceding underscore
+> - Dedicated documentation directory: `__docs__`
 
-[`warehouse_sim`](./warehouse_sim/)
+---
 
-<h1>Data Store Definition</h1>
-
-[`data_store_definition`](./data_store_definition/)
-
-<h1>Test Notebooks</h1>
-
-[`test_notebooks`](./test_notebooks/)
-
-<h1>Devlog</h1>
-
-[`devlog.md`](./devlog.md)
+| **Resource** | `Link` |
+| --- | --- |
+| **Warehouse simulation package** | [`warehouse_sim`](./warehouse_sim/) |
+| **Toy simulation package** | [`toy_sim`](./toy_sim/) |
+| **Data store definition** | [`_dataStoreDefinition`](./_dataStoreDefinition/) |
+| **Test notebooks** | [`_testNotebooks`](./_testNotebooks/) |
+| **Devlog** | [`devlog.md`](./devlog.md) |
+| **Dedicated documentation directory** | [`__docs__`](./__docs__/) |
 
 <h1>Implementation Notes</h1>
 

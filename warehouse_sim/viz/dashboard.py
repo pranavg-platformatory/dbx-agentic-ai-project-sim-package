@@ -1,22 +1,32 @@
 '''
 warehouse_sim/viz/dashboard.py
 
-Visualisation layer. Reads from hist_* and ops_* tables for a given
-sim_id and produces matplotlib figures.
+Visualisation layer.
 
-No engine, agent, or Spark write dependency.
-All functions accept a SparkSession and return matplotlib Figure objects
-so they can be rendered in a Databricks notebook or saved to disk.
+- Reads from "hist_*" and "ops_*" tables for a given `sim_id`
+- Produces matplotlib figures using the data from the above
+
+---
+
+NOTE:
+- This module has no engine, agent, or Spark write dependency
+- All functions accept a SparkSession and return matplotlib Figure objects
+- This is so they can be rendered in a Databricks notebook or saved to disk
+
+---
 
 Usage:
-    from warehouse_sim.viz.dashboard import SimDashboard
-    dash = SimDashboard(spark, sim_id="sim_001")
-    dash.plot_stock()
-    dash.plot_demand()
-    dash.plot_costs()
-    dash.plot_cumulative_cost()
-    dash.plot_decisions()
-    dash.plot_all()
+
+```
+from warehouse_sim.viz.dashboard import SimDashboard
+dash = SimDashboard(spark, sim_id="sim_001")
+dash.plot_stock()
+dash.plot_demand()
+dash.plot_costs()
+dash.plot_cumulative_cost()
+dash.plot_decisions()
+dash.plot_all()
+```
 '''
 
 from __future__ import annotations
@@ -25,12 +35,10 @@ from typing import Optional, TYPE_CHECKING
 
 import pandas as pd
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 from matplotlib.figure import Figure
 
 if TYPE_CHECKING:
     from pyspark.sql import SparkSession
-
 
 # ---------------------------------------------------------------------------
 # Colour palette - consistent across all charts
@@ -38,20 +46,19 @@ if TYPE_CHECKING:
 
 ITEM_COLOURS = [
     "#4C72B0", "#DD8452", "#55A868", "#C44E52",
-    "#8172B2", "#937860", "#DA8BC3", "#8C8C8C",
+    "#8172B2", "#937860", "#DA8BC3", "#8C8C8C"
 ]
 
 COST_COLOURS = {
-    "holding_cost":      "#4C72B0",
-    "stockout_cost":     "#C44E52",
-    "order_cost":        "#55A868",
-    "transit_loss_cost": "#DD8452",
+    "holding_cost"     : "#4C72B0",
+    "stockout_cost"    : "#C44E52",
+    "order_cost"       : "#55A868",
+    "transit_loss_cost": "#DD8452"
 }
 
 DISRUPTION_COLOUR = "#C44E52"
 REORDER_COLOUR    = "#55A868"
 HOLD_COLOUR       = "#AAAAAA"
-
 
 # ---------------------------------------------------------------------------
 # SimDashboard
@@ -59,10 +66,10 @@ HOLD_COLOUR       = "#AAAAAA"
 
 class SimDashboard:
     '''
-    Reads simulation output tables for one sim_id and exposes
-    one plot method per view.
+    - Reads simulation output tables for one `sim_id`
+    - Exposes one plot method per view.
 
-    All DataFrames are loaded lazily and cached on first access.
+    NOTE: All DataFrames are loaded lazily and cached on first access.
     '''
 
     def __init__(self, spark: "SparkSession", sim_id: str) -> None:
@@ -71,11 +78,11 @@ class SimDashboard:
         self._cat    = "hackathon_of_the_century"
 
         # Lazy caches
-        self._df_stock:      Optional[pd.DataFrame] = None
-        self._df_demand:     Optional[pd.DataFrame] = None
-        self._df_cost_tick:  Optional[pd.DataFrame] = None
-        self._df_cost_cum:   Optional[pd.DataFrame] = None
-        self._df_decisions:  Optional[pd.DataFrame] = None
+        self._df_stock      : Optional[pd.DataFrame] = None
+        self._df_demand     : Optional[pd.DataFrame] = None
+        self._df_cost_tick  : Optional[pd.DataFrame] = None
+        self._df_cost_cum   : Optional[pd.DataFrame] = None
+        self._df_decisions  : Optional[pd.DataFrame] = None
         self._df_disruptions: Optional[pd.DataFrame] = None
 
     # ------------------------------------------------------------------
@@ -200,9 +207,11 @@ class SimDashboard:
 
     def plot_stock(self) -> Figure:
         '''
-        Stock on hand and stock in transit per item, per tick.
-        Disruption-active ticks shaded in red.
+        Render stock on hand and stock in transit per item, per tick.
+
+        NOTE: Disruption-active ticks shaded in red.
         '''
+
         items = self._items()
         fig, axes = plt.subplots(
             len(items), 1,
@@ -250,9 +259,11 @@ class SimDashboard:
 
     def plot_demand(self) -> Figure:
         '''
-        Disrupted demand vs fulfilled demand vs unmet demand per item.
-        Unmet demand shown as a stacked red area (stockout signal).
+        Render disrupted demand vs. fulfilled demand vs. unmet demand per item.
+
+        NOTE: Unmet demand shown as a stacked red area (stockout signal).
         '''
+
         items = self._items()
         fig, axes = plt.subplots(
             len(items), 1,
@@ -291,9 +302,8 @@ class SimDashboard:
     # ------------------------------------------------------------------
 
     def plot_costs(self) -> Figure:
-        '''
-        Stacked bar chart of cost components per tick per item.
-        '''
+        '''Render stacked bar chart of cost components per tick per item.'''
+
         items      = self._items()
         components = ["holding_cost", "stockout_cost", "order_cost", "transit_loss_cost"]
         labels     = ["Holding", "Stockout", "Order", "Transit loss"]
@@ -336,9 +346,11 @@ class SimDashboard:
 
     def plot_cumulative_cost(self) -> Figure:
         '''
-        Cumulative total cost per item over the simulation.
-        Remaining budget shown as a horizontal dashed line (if applicable).
+        Render cumulative total cost per item over the simulation.
+
+        NOTE: Remaining budget shown as a horizontal dashed line (if applicable).
         '''
+
         items = self._items()
         fig, ax = plt.subplots(figsize=(12, 4))
 
@@ -377,9 +389,13 @@ class SimDashboard:
 
     def plot_decisions(self) -> Figure:
         '''
-        Reorder decisions over time: order quantity as a bar when reorder,
-        zero line for hold. Stock at decision time shown as a line overlay.
+        Render reorder decisions over time:
+        - Order quantity as a bar for reorder
+        - Zero line for hold
+
+        NOTE: Stock at decision time shown as a line overlay.
         '''
+
         items = self._items()
         fig, axes = plt.subplots(
             len(items), 1,
@@ -433,9 +449,11 @@ class SimDashboard:
 
     def plot_all(self) -> dict[str, Figure]:
         '''
-        Render all five charts and return them as a dict keyed by name.
-        In a Databricks notebook, each figure displays automatically.
+        Render all five charts and return them as a dictionary keyed by name.
+
+        NOTE: In a Databricks notebook, each figure displays automatically.
         '''
+
         figures = {}
 
         print("Rendering stock levels...")
@@ -466,6 +484,7 @@ class SimDashboard:
 
     def print_summary(self) -> None:
         '''Print a concise run summary to stdout.'''
+        
         items = self._items()
 
         print(f"\n{'='*55}")

@@ -1,15 +1,22 @@
 '''
 warehouse_sim/world/setup.py
 
-Writes a fully constructed SimWorld into the Databricks env tables.
-This is the world-initialisation step that runs once before the engine starts.
+- Writes a fully constructed SimWorld into the Databricks env tables
+- This is the world-initialisation step that runs once before the engine starts
+- It is the write-side complement of config/loader.py (which reads the same tables)
 
-It is the write-side complement of config/loader.py (which reads the same tables).
-No engine or agent dependency - only Stage 1 models are imported.
+---
+
+NOTE: No engine or agent dependency - only Stage 1 models (i.e. warehouse_sim/config) are imported.
+
+---
 
 Usage:
-    from warehouse_sim.world.setup import write_world, teardown_world
-    write_world(spark, world)
+
+```
+from warehouse_sim.world.setup import write_world, teardown_world
+write_world(spark, world)
+```
 '''
 
 from __future__ import annotations
@@ -46,11 +53,16 @@ def _t(name: str) -> str:
 
 # ---------------------------------------------------------------------------
 # Explicit DDL schemas per table
-# These prevent PySpark from inferring long instead of int, missing nullability
-# on arrays, or ambiguous boolean/double types - same class of issues seen
-# in the Stage 1 notebook when using createDataFrame without a schema.
+
+# NOTE:
+# - These prevent PySpark from dealing with:
+#   - Inferring long instead of int
+#   - Missing nullability on arrays
+#   - Ambiguous boolean/double types
+# - The same class of issues were seen in the Stage 1 notebook (_testNotebooks/stage1-testAndInspect.py in this repo) when using `createDataFrame` without a schema.
 # ---------------------------------------------------------------------------
 
+# REFERENCE: _dataStoreDefinition in this repo
 _SCHEMAS = {
     "env_sim_config": '''
         sim_id                     STRING,
@@ -135,10 +147,28 @@ def _now() -> datetime:
 
 def _write(spark: "SparkSession", table_key: str, rows: list[dict]) -> None:
     '''
-    Create a DataFrame from a list of plain dicts using the explicit schema
-    for that table, then append to the Delta table.
-    Using explicit schemas avoids all PySpark type inference surprises.
+    - Create a DataFrame from a list of dictionaries
+    - IMPORTANT: Do the above using the explicit schema for that table
+    - Then append to the Delta table specified by `table_key`
+
+    NOTE:
+    - Using explicit schemas avoids all PySpark type inference surprises
+    - The DataFrame created from the list of dictionaries is:
+        - Created within the context of `spark`, the SparkSession instance
+        - Immediately appended to the specified table
+
+    ---
+
+    PARAMETERS:
+    - `spark` (SparkSession): SparkSession instance handling Spark operations
+    - `table_key` (str): Table name (without qualifying catalog or schema) \n
+      Table names (without qualifying catalog or schema) are keys in `_SCHEMA`
+    - `rows` (list[dict]): List of rows in the specified table, each row represented by a dictionary
+    
+    RETURNS:
+    - None
     '''
+    
     schema = _SCHEMAS[table_key].strip()
     spark.createDataFrame(rows, schema=schema).write.mode("append").saveAsTable(_t(table_key))
 
@@ -146,9 +176,20 @@ def _write(spark: "SparkSession", table_key: str, rows: list[dict]) -> None:
 def _delete_sim_rows(spark: "SparkSession", sim_id: str) -> None:
     '''
     Remove all rows scoped to sim_id from tables that carry a sim_id column.
-    Tables without sim_id (env_item_types, env_suppliers, env_consumers) are
-    NOT touched - those entities are shared across runs.
+
+    NOTE: Tables without `sim_id` ("env_item_types", "env_suppliers", "env_consumers") are NOT touched - those entities are shared across runs.
+    
+    ---
+
+    PARAMETERS:
+    - `spark` (SparkSession): SparkSession instance handling Spark operations
+    - `table` (str): Fully-qualified table name (refer to the docstring of `_get_fully_qualified_table_name`)
+    - `sim_id` (str): Simulation ID
+
+    RETURNS:
+    - None
     '''
+
     for table in [
         "env_sim_config",
         "env_supplier_item_map",
@@ -162,6 +203,8 @@ def _delete_sim_rows(spark: "SparkSession", sim_id: str) -> None:
 # ---------------------------------------------------------------------------
 # Per-table writers
 # ---------------------------------------------------------------------------
+
+# NOTE: Detailed docstrings are not given for the following as they are simply wrappers for `_write`, each function wrapping the `_write` function call needed to add data into the tables referenced/indicated by the function names.
 
 def _write_sim_config(spark: "SparkSession", config: SimConfig) -> None:
     _write(spark, "env_sim_config", [{
@@ -180,9 +223,12 @@ def _write_sim_config(spark: "SparkSession", config: SimConfig) -> None:
 
 def _write_items(spark: "SparkSession", items: dict[str, ItemType]) -> None:
     '''
-    env_item_types has no sim_id - upsert pattern: delete by item_id then insert.
-    Safe because item definitions are expected to be consistent across runs.
+    NOTE:
+    - "env_item_types" has no `sim_id`
+    - Hence, the upsert pattern is: delete by `item_id` then insert.
+    - This is safe because item definitions are expected to be consistent across runs
     '''
+
     ids_sql = ", ".join(f"'{i}'" for i in items)
     spark.sql(f"DELETE FROM {_t('env_item_types')} WHERE item_id IN ({ids_sql})")
 
@@ -305,14 +351,22 @@ def write_world(spark: "SparkSession", world: SimWorld) -> None:
     '''
     Persist a fully constructed SimWorld into the Databricks env tables.
 
-    Safe to call repeatedly for the same sim_id - existing rows for this
-    sim_id are deleted before re-insertion (idempotent).
+    NOTE: This is safe to call repeatedly for the same `sim_id` - existing rows for this `sim_id` are deleted before re-insertion (=> idempotency).
 
     Write order respects logical dependencies:
-      1. Shared entity tables (items, suppliers, consumers) - no sim_id
-      2. sim config
-      3. Mapping tables (scoped by sim_id)
-      4. Patterns and disruptions (scoped by sim_id)
+    1. Shared entity tables (for items, suppliers, consumers) - no `sim_id`
+    2. Simulation configuration (encapsulated by a SimConfig instance)
+    3. Mapping tables (scoped by `sim_id`)
+    4. Patterns and disruptions (scoped by `sim_id`)
+
+    ---
+
+    PARAMETERS:
+    - `spark` (SparkSession): SparkSession instance handling Spark operations
+    - `world` (SimWorld): SimWorld instance encapsulating the configuration for the simulation
+
+    RETURNS:
+    - None
     '''
     sim_id = world.config.sim_id
 
@@ -346,9 +400,19 @@ def write_world(spark: "SparkSession", world: SimWorld) -> None:
 
 def teardown_world(spark: "SparkSession", sim_id: str) -> None:
     '''
-    Remove all env table rows for a given sim_id.
-    Shared entity rows (items, suppliers, consumers) are NOT removed
-    as they may be referenced by other sim runs.
+    Remove all env table rows for a given `sim_id`.
+    
+    NOTE: Shared entity rows (items, suppliers, consumers) are NOT removed as they may be referenced by other simulation runs.
+    
+    ---
+
+    PARAMETERS:
+    - `spark` (SparkSession): SparkSession instance handling Spark operations
+    - `sim_id` (str): Simulation ID
+
+    RETURNS:
+    - None
     '''
+    
     _delete_sim_rows(spark, sim_id)
     print(f"[setup] Teardown complete for sim_id={sim_id!r}")

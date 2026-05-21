@@ -4,6 +4,8 @@ warehouse_sim/config/loader.py
 - Reads all env tables for a given `sim_id` from Databricks
 - Assembles a fully typed SimWorld object
 
+---
+
 NOTE:
 - This is the only Databricks-aware file in the infra layer
 - Everything else works with plain Python objects
@@ -116,7 +118,7 @@ def _single_row(spark: "SparkSession", table: str, sim_id: str) -> dict:
     - `sim_id` (str): Simulation ID
 
     RETURNS:
-    - (dict): A single row represented by a dictionary
+    - (dict): Single row represented by a dictionary
     '''
     
     rows = _rows(spark, table, sim_id)

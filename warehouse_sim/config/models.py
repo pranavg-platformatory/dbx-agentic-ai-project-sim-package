@@ -3,7 +3,10 @@ warehouse_sim/config/models.py
 
 - Pydantic v2 data models for every entity in the simulation schema
 - These are the canonical typed representations used throughout the package
-- No Databricks dependency - pure Python
+
+---
+
+NOTE: No Databricks dependency - pure Python.
 '''
 
 from __future__ import annotations

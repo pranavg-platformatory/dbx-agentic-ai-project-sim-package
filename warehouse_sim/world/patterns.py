@@ -3,7 +3,10 @@ warehouse_sim/world/patterns.py
 
 - Demand and supply pattern sampling
 - Given a `Pattern` model and a tick number, returns a sampled integer quantity
-- No Databricks dependency - pure Python / numpy.
+
+---
+
+NOTE: No Databricks dependency - pure Python / numpy.
 
 ---
 
@@ -13,6 +16,12 @@ Supports:
 - Seasonal multiplier overlay
 - Gaussian noise
 - Deterministic output via a seeded numpy RNG
+
+---
+
+The spec sections referenced in this source file are present in the following path (in this repository):
+
+__docs__/simulationSpecs.md
 
 ---
 
@@ -55,7 +64,7 @@ class PatternSampler:
         '''
         Draw one sample for the given pattern at the given tick.
 
-        Pipeline (spec section 3.5):
+        Pipeline (spec section 3.5, __docs__/simulationSpecs.md in this repo):
         1. Base value from distribution or custom schedule
         2. Apply seasonal multiplier (if present)
         3. Add Gaussian noise (if `noise_std` > 0)
@@ -63,6 +72,7 @@ class PatternSampler:
 
         Returns an integer quantity >= 0.
         '''
+
         base = self._base_value(pattern, tick)
         value = self._apply_seasonal(base, pattern, tick)
         value = self._apply_noise(value, pattern)
@@ -70,11 +80,11 @@ class PatternSampler:
 
     def sample_lead_time(self, base_ticks: int, variability: float) -> int:
         '''
-        Sample an actual lead time (spec section 3.6).
-        Returns max(1, round(Normal(base_ticks, variability))).
-        Called by the engine at reorder placement; placed here so the
-        same RNG is used for all stochastic draws.
+        - Sample an actual lead time (spec section 3.6, __docs__/simulationSpecs.md in this repo)
+        - Returns `max(1, round(Normal(base_ticks, variability)))`
+        - Called by the engine at reorder placement; placed here so the same RNG is used for all stochastic draws
         '''
+
         if variability == 0.0:
             return base_ticks
         raw = self._rng.normal(loc=base_ticks, scale=variability)
@@ -82,9 +92,10 @@ class PatternSampler:
 
     def draw_uniform(self) -> float:
         '''
-        Draw a single uniform [0, 1) float.
-        Used by engine/disruptions.py for stochastic trigger checks.
+        - Draw a single `uniform [0, 1)` float
+        - Used by engine/disruptions.py for stochastic trigger checks
         '''
+
         return float(self._rng.uniform())
 
     # ------------------------------------------------------------------

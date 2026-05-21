@@ -3,17 +3,31 @@ warehouse_sim/eventlog/event_log.py
 
 Append-only event writer for the simulation event log.
 
-Provides a typed `EventLogger` class with one method per event type.
-The engine calls these methods directly - it never constructs raw dicts.
-No simulation logic lives here; this is pure serialisation and I/O.
+- Provides a typed EventLogger class with one method per event type
+- The engine calls these methods directly and never constructs raw dictionaries
+- IMPORTANT: No simulation logic lives here; this is pure serialisation and I/O
 
-No Databricks dependency at import time - PySpark is imported lazily
-inside `_write` so this module is testable without a Spark session.
+--
+
+NOTE:
+- No Databricks dependency at import time
+- PySpark is imported lazily inside `_write` so this module is testable without a Spark session
+
+---
+
+The spec sections referenced in this source file are present in the following path (in this repository):
+
+__docs__/simulationSpecs.md
+
+---
 
 Usage:
-    from warehouse_sim.eventlog.event_log import EventLogger
-    logger = EventLogger(spark, sim_id="sim_001")
-    logger.sim_started(tick=0, config_snapshot={"num_ticks": 30, ...})
+
+```
+from warehouse_sim.eventlog.event_log import EventLogger
+logger = EventLogger(spark, sim_id="sim_001")
+logger.sim_started(tick=0, config_snapshot={"num_ticks": 30, ...})
+```
 '''
 
 from __future__ import annotations
@@ -35,7 +49,7 @@ CATALOG    = "hackathon_of_the_century"
 EVENTLOG   = f"{CATALOG}.tables4eventlog"
 TABLE      = f"{EVENTLOG}.event_log"
 
-# Explicit schema - avoids PySpark type inference issues (same lesson as setup.py)
+# Explicit schema - avoids PySpark type inference issues (same lesson as warehouse_sim/world/setup.py)
 _SCHEMA = '''
     event_id   STRING,
     sim_id     STRING,
@@ -47,7 +61,7 @@ _SCHEMA = '''
     logged_at  TIMESTAMP
 '''
 
-# Valid event types - matches spec section 7
+# Valid event types - matches spec section 7, __docs__/simulationSpecs.md in this repo
 EVENT_TYPES = frozenset({
     "SIM_STARTED",
     "SIM_ENDED",
@@ -75,13 +89,22 @@ EVENT_TYPES = frozenset({
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
-
 def _new_id() -> str:
     return str(uuid.uuid4())
 
-
 def _serialise(payload: dict[str, Any]) -> str:
-    '''Serialise payload to JSON string. Handles datetime and other non-standard types.'''
+    '''
+    Serialise payload dictionary (key-value storage object) to JSON string; handles datetime and other non-standard types.
+    
+    ---
+
+    PARAMETERS:
+    - `payload` (dict[str, Any]): Dictionary (key-value storage object) to serialise into JSON string
+
+    RETURNS:
+    - (str): JSON string
+    '''
+    
     def _default(obj: Any) -> Any:
         if isinstance(obj, datetime):
             return obj.isoformat()
@@ -97,7 +120,23 @@ def _build_row(
     item_id:    str | None   = None,
     entity_id:  str | None   = None,
 ) -> dict:
-    '''Build a plain dict representing one event_log row.'''
+    '''
+    Build a dictionary representing one "event_log" row.
+    
+    ---
+
+    PARAMETERS:
+    - `sim_id` (str): Simulation ID
+    - `tick` (int): Simulation tick number
+    - `event_type` (str): Event type (refer to spec section 7, __docs__/simulationSpecs.md in this repo)
+    - `payload` (dict[str, Any]): Dictionary containing event-specific data (quantities, costs, magnitudes, reasoning, etc.)
+    - `item_id` (str, optional): Item type involved; `None` for sim-level events
+    - `entity_id` (str, optional): ID of the primary entity (supplier, consumer, order, disruption); `None` if not applicable
+
+    RETURNS:
+    - (dict): Built row represented by a dictionary
+    '''
+
     if event_type not in EVENT_TYPES:
         raise ValueError(f"Unknown event_type: {event_type!r}")
     return {
@@ -118,10 +157,12 @@ def _build_row(
 
 class EventLogger:
     '''
-    Typed event writer. One instance per simulation run.
-    Each public method corresponds to one event type in the spec.
-
-    The engine imports and calls this - the logger never calls the engine.
+    Typed event writer.
+    
+    NOTE:
+    - One instance per simulation run
+    - Each public method corresponds to one event type in the spec
+    - IMPORTANT: The engine imports and calls this; the event logger never calls the engine
     '''
 
     def __init__(self, spark: "SparkSession", sim_id: str) -> None:
@@ -133,7 +174,18 @@ class EventLogger:
     # ------------------------------------------------------------------
 
     def _write(self, row: dict) -> None:
-        '''Append one event row to event_log using an explicit schema.'''
+        '''
+        Append one event row to "event_log" using an explicit schema.
+        
+        ---
+
+        PARAMETERS:
+        - `row` (dict): Dictionary representing the event log row to insert
+
+        RETURNS:
+        - None
+        '''
+
         self._spark.createDataFrame([row], schema=_SCHEMA.strip()) \
             .write.mode("append").saveAsTable(TABLE)
 
@@ -145,6 +197,19 @@ class EventLogger:
         item_id:    str | None = None,
         entity_id:  str | None = None,
     ) -> None:
+        '''
+        - Builds an event log row using `_build_row`
+        - Writes it to the "event_log" table using `_write`
+
+        ---
+
+        PARAMETERS:
+        - Same as `_build_row`
+
+        RETURNS:
+        - None
+        '''
+        
         row = _build_row(
             sim_id     = self._sim_id,
             tick       = tick,
@@ -158,6 +223,8 @@ class EventLogger:
     # ------------------------------------------------------------------
     # Simulation lifecycle
     # ------------------------------------------------------------------
+
+    # NOTE: Detailed docstrings are not given for the following as they are simply wrappers for `_emit`, each function wrapping the `_emit` function call needed to add data for the event types referenced/indicated by the function names.
 
     def sim_started(self, tick: int, config_snapshot: dict[str, Any]) -> None:
         self._emit(tick, "SIM_STARTED", {"config_snapshot": config_snapshot})
@@ -179,6 +246,8 @@ class EventLogger:
     # Tick lifecycle
     # ------------------------------------------------------------------
 
+    # NOTE: Detailed docstrings are not given for the following as they are simply wrappers for `_emit`, each function wrapping the `_emit` function call needed to add data for the event types referenced/indicated by the function names.
+
     def tick_started(self, tick: int) -> None:
         self._emit(tick, "TICK_STARTED", {"tick": tick})
 
@@ -188,6 +257,8 @@ class EventLogger:
     # ------------------------------------------------------------------
     # Demand
     # ------------------------------------------------------------------
+
+    # NOTE: Detailed docstrings are not given for the following as they are simply wrappers for `_emit`, each function wrapping the `_emit` function call needed to add data for the event types referenced/indicated by the function names.
 
     def demand_drawn(
         self,
@@ -220,6 +291,8 @@ class EventLogger:
     # ------------------------------------------------------------------
     # Supply
     # ------------------------------------------------------------------
+
+    # NOTE: Detailed docstrings are not given for the following as they are simply wrappers for `_emit`, each function wrapping the `_emit` function call needed to add data for the event types referenced/indicated by the function names.
 
     def supply_arrived(
         self,
@@ -256,6 +329,8 @@ class EventLogger:
     # ------------------------------------------------------------------
     # Reorder decisions
     # ------------------------------------------------------------------
+
+    # NOTE: Detailed docstrings are not given for the following as they are simply wrappers for `_emit`, each function wrapping the `_emit` function call needed to add data for the event types referenced/indicated by the function names.
 
     def reorder_placed(
         self,
@@ -307,6 +382,8 @@ class EventLogger:
     # Disruptions
     # ------------------------------------------------------------------
 
+    # NOTE: Detailed docstrings are not given for the following as they are simply wrappers for `_emit`, each function wrapping the `_emit` function call needed to add data for the event types referenced/indicated by the function names.
+
     def disruption_activated(
         self,
         tick:               int,
@@ -335,6 +412,8 @@ class EventLogger:
     # Costs
     # ------------------------------------------------------------------
 
+    # NOTE: Detailed docstrings are not given for the following as they are simply wrappers for `_emit`, each function wrapping the `_emit` function call needed to add data for the event types referenced/indicated by the function names.
+
     def cost_accrued(
         self,
         tick:               int,
@@ -356,6 +435,8 @@ class EventLogger:
     # ------------------------------------------------------------------
     # Budget
     # ------------------------------------------------------------------
+
+    # NOTE: Detailed docstrings are not given for the following as they are simply wrappers for `_emit`, each function wrapping the `_emit` function call needed to add data for the event types referenced/indicated by the function names.
 
     def budget_warning(
         self,
@@ -394,10 +475,26 @@ def build_event_row(
     entity_id:  str | None = None,
 ) -> dict:
     '''
-    Build and return a single event row dict without writing to Spark.
-    Used in unit tests and anywhere the row needs to be inspected
-    before writing.
+    Wrapper for `_build_row`:
+    - Build and return a single event row dict without writing to Spark
+    - Used in unit tests and anywhere the row needs to be inspected before writing
+
+    ---
+
+    NOTE: Parameters and return values are the same as for `_build_row`, but are given below for reference, since `build_event_row` is the public wrapper for `_build_row`.
+
+    PARAMETERS:
+    - `sim_id` (str): Simulation ID
+    - `tick` (int): Simulation tick number
+    - `event_type` (str): Event type (refer to spec section 7, __docs__/simulationSpecs.md in this repo)
+    - `payload` (dict[str, Any]): Dictionary containing event-specific data (quantities, costs, magnitudes, reasoning, etc.)
+    - `item_id` (str, optional): Item type involved; `None` for sim-level events
+    - `entity_id` (str, optional): ID of the primary entity (supplier, consumer, order, disruption); `None` if not applicable
+
+    RETURNS:
+    - (dict): Built row represented by a dictionary
     '''
+    
     return _build_row(
         sim_id=sim_id,
         tick=tick,

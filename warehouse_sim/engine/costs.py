@@ -1,4 +1,4 @@
-"""
+'''
 warehouse_sim/engine/costs.py
 
 Sub-step 5 of the tick sequence: accumulate costs and write to
@@ -13,7 +13,7 @@ Cost components per tick (spec section 3.7):
                  charged at arrival; 0 if no transit loss this tick
 
 No agent dependency.
-"""
+'''
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ CATALOG         = "hackathon_of_the_century"
 _ACCUM_TABLE    = f"{CATALOG}.tables4ops.ops_cost_accumulator"
 _HIST_TABLE     = f"{CATALOG}.tables4hist.hist_cost_by_tick"
 
-_ACCUM_SCHEMA = """
+_ACCUM_SCHEMA = '''
     sim_id                      STRING,
     tick                        INT,
     item_id                     STRING,
@@ -45,9 +45,9 @@ _ACCUM_SCHEMA = """
     cumulative_transit_loss_cost DOUBLE,
     cumulative_total_cost       DOUBLE,
     remaining_budget            DOUBLE
-"""
+'''
 
-_HIST_SCHEMA = """
+_HIST_SCHEMA = '''
     sim_id             STRING,
     tick               INT,
     item_id            STRING,
@@ -56,7 +56,7 @@ _HIST_SCHEMA = """
     order_cost         DOUBLE,
     transit_loss_cost  DOUBLE,
     total_cost         DOUBLE
-"""
+'''
 
 
 # ---------------------------------------------------------------------------
@@ -65,10 +65,10 @@ _HIST_SCHEMA = """
 
 @dataclass
 class CostState:
-    """
+    '''
     Mutable in-memory cumulative cost totals for one item.
     The runner updates these each tick and writes a snapshot.
-    """
+    '''
     item_id:                      str
     cumulative_holding_cost:      float = 0.0
     cumulative_stockout_cost:     float = 0.0
@@ -90,24 +90,24 @@ class CostState:
 # ---------------------------------------------------------------------------
 
 def compute_holding_cost(stock_on_hand: int, item: ItemType) -> float:
-    """Holding cost on end-of-tick stock (spec: post-arrival, post-demand)."""
+    '''Holding cost on end-of-tick stock (spec: post-arrival, post-demand).'''
     return stock_on_hand * item.holding_cost_per_unit_per_tick
 
 
 def compute_stockout_cost(unmet_demand: int, item: ItemType) -> float:
-    """Penalty per unit of unmet demand."""
+    '''Penalty per unit of unmet demand.'''
     return unmet_demand * item.stockout_cost_per_unit_per_tick
 
 
 def compute_order_cost(order_qty: int, item: ItemType) -> float:
-    """Fixed + variable cost at placement. 0 if no order placed (order_qty=0)."""
+    '''Fixed + variable cost at placement. 0 if no order placed (order_qty=0).'''
     if order_qty == 0:
         return 0.0
     return item.order_fixed_cost + (order_qty * item.order_variable_cost_per_unit)
 
 
 def compute_transit_loss_cost(lost_qty: int, item: ItemType) -> float:
-    """Cost per unit lost in transit. 0 if no transit loss."""
+    '''Cost per unit lost in transit. 0 if no transit loss.'''
     return lost_qty * item.transit_loss_cost_per_unit
 
 
@@ -118,11 +118,11 @@ def accumulate(
     order_cost:        float,
     transit_loss_cost: float,
 ) -> tuple[float, float, float, float]:
-    """
+    '''
     Add this tick's costs to the running totals.
     Mutates cost_state in place.
     Returns the four per-tick costs for hist_cost_by_tick.
-    """
+    '''
     cost_state.cumulative_holding_cost      += holding_cost
     cost_state.cumulative_stockout_cost     += stockout_cost
     cost_state.cumulative_order_cost        += order_cost
@@ -134,10 +134,10 @@ def check_budget(
     remaining_budget:  Optional[float],
     order_cost:        float,
 ) -> bool:
-    """
+    '''
     Return True if the order is affordable given the remaining budget.
     Always True when remaining_budget is None (unlimited).
-    """
+    '''
     if remaining_budget is None:
         return True
     return order_cost <= remaining_budget
@@ -147,7 +147,7 @@ def deduct_budget(
     remaining_budget: Optional[float],
     cost:             float,
 ) -> Optional[float]:
-    """Deduct cost from remaining_budget. Returns None if unlimited."""
+    '''Deduct cost from remaining_budget. Returns None if unlimited.'''
     if remaining_budget is None:
         return None
     return max(0.0, remaining_budget - cost)
@@ -164,7 +164,7 @@ def write_cost_accumulator(
     cost_states:      dict[str, CostState],
     remaining_budget: Optional[float],
 ) -> None:
-    """Append cumulative cost row per item for this tick to ops_cost_accumulator."""
+    '''Append cumulative cost row per item for this tick to ops_cost_accumulator.'''
     rows = [
         {
             "sim_id":                       sim_id,
@@ -189,7 +189,7 @@ def write_cost_by_tick(
     tick:        int,
     tick_costs:  dict[str, dict],   # item_id -> {holding, stockout, order, transit_loss}
 ) -> None:
-    """Append per-tick cost breakdown per item to hist_cost_by_tick."""
+    '''Append per-tick cost breakdown per item to hist_cost_by_tick.'''
     rows = [
         {
             "sim_id":            sim_id,

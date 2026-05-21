@@ -84,10 +84,10 @@ NOW_TS  = datetime.now(timezone.utc)
 
 
 # -- env_sim_config ----------------------------------------------------------
-spark.sql(f"""
+spark.sql(f'''
     DELETE FROM {CATALOG}.tables4env.env_sim_config
     WHERE sim_id = '{SIM_ID}'
-""")
+''')
 
 spark.createDataFrame([Row(
     sim_id                     = SIM_ID,
@@ -119,10 +119,10 @@ print("[DONE] env_sim_config seeded")
 # -- env_item_types ----------------------------------------------------------
 # (no `sim_id` column - shared across runs)
 for item_id, item_name in [("item_A", "Widget A"), ("item_B", "Gadget B")]:
-    spark.sql(f"""
+    spark.sql(f'''
         DELETE FROM {CATALOG}.tables4env.env_item_types
         WHERE item_id = '{item_id}'
-    """)
+    ''')
 
 spark.createDataFrame([
     Row(
@@ -172,10 +172,10 @@ print("[DONE] env_item_types seeded")
 
 
 # -- `env_suppliers` -----------------------------------------------------------
-spark.sql(f"""
+spark.sql(f'''
     DELETE FROM {CATALOG}.tables4env.env_suppliers
     WHERE supplier_id = 'sup_001'
-""")
+''')
 
 spark.createDataFrame([Row(
     supplier_id           = "sup_001",
@@ -193,10 +193,10 @@ print("[DONE] env_suppliers seeded")
 
 
 # -- env_consumers -----------------------------------------------------------
-spark.sql(f"""
+spark.sql(f'''
     DELETE FROM {CATALOG}.tables4env.env_consumers
     WHERE consumer_id = 'con_001'
-""")
+''')
 
 spark.createDataFrame([Row(
     consumer_id   = "con_001",
@@ -207,10 +207,10 @@ print("[DONE] env_consumers seeded")
 
 
 # -- `env_supplier_item_map` ---------------------------------------------------
-spark.sql(f"""
+spark.sql(f'''
     DELETE FROM {CATALOG}.tables4env.env_supplier_item_map
     WHERE sim_id = '{SIM_ID}'
-""")
+''')
 
 spark.createDataFrame([
     Row(sim_id=SIM_ID, supplier_id="sup_001", item_id="item_A"),
@@ -221,10 +221,10 @@ print("[DONE] env_supplier_item_map seeded")
 
 
 # -- `env_consumer_item_map` ---------------------------------------------------
-spark.sql(f"""
+spark.sql(f'''
     DELETE FROM {CATALOG}.tables4env.env_consumer_item_map
     WHERE sim_id = '{SIM_ID}'
-""")
+''')
 
 spark.createDataFrame([
     Row(sim_id=SIM_ID, consumer_id="con_001", item_id="item_A"),
@@ -235,10 +235,10 @@ print("[DONE] env_consumer_item_map seeded")
 
 
 # -- `env_patterns` ------------------------------------------------------------
-spark.sql(f"""
+spark.sql(f'''
     DELETE FROM {CATALOG}.tables4env.env_patterns
     WHERE sim_id = '{SIM_ID}'
-""")
+''')
 
 import json
 
@@ -275,10 +275,10 @@ print("[DONE] env_patterns seeded")
 
 
 # -- `env_disruption_schedule` -------------------------------------------------
-spark.sql(f"""
+spark.sql(f'''
     DELETE FROM {CATALOG}.tables4env.env_disruption_schedule
     WHERE sim_id = '{SIM_ID}'
-""")
+''')
 
 spark.createDataFrame([
     Row(
@@ -308,10 +308,10 @@ print("\nAll env tables seeded for sim_id =", SIM_ID)
 
 # COMMAND ----------
 
-display(spark.sql(f"""
+display(spark.sql(f'''
     SELECT * FROM {CATALOG}.tables4env.env_sim_config
     WHERE sim_id = '{SIM_ID}'
-"""))
+'''))
 
 # COMMAND ----------
 
@@ -319,9 +319,9 @@ display(spark.sql(f"""
 
 # COMMAND ----------
 
-display(spark.sql(f"""
+display(spark.sql(f'''
     SELECT * FROM {CATALOG}.tables4env.env_item_types WHERE item_id IN ('item_A', 'item_B')
-"""))
+'''))
 
 # COMMAND ----------
 
@@ -329,7 +329,7 @@ display(spark.sql(f"""
 
 # COMMAND ----------
 
-display(spark.sql(f"""
+display(spark.sql(f'''
     SELECT s.sim_id, s.item_id, s.supplier_id, sup.supplier_name,
            c.consumer_id, con.consumer_name
     FROM {CATALOG}.tables4env.env_supplier_item_map s
@@ -337,7 +337,7 @@ display(spark.sql(f"""
     JOIN {CATALOG}.tables4env.env_consumer_item_map c ON s.sim_id = c.sim_id AND s.item_id = c.item_id
     JOIN {CATALOG}.tables4env.env_consumers con ON c.consumer_id = con.consumer_id
     WHERE s.sim_id = '{SIM_ID}'
-"""))
+'''))
 
 # COMMAND ----------
 
@@ -345,11 +345,11 @@ display(spark.sql(f"""
 
 # COMMAND ----------
 
-display(spark.sql(f"""
+display(spark.sql(f'''
     SELECT pattern_id, item_id, role, pattern_type, distribution, dist_params, noise_std
     FROM {CATALOG}.tables4env.env_patterns
     WHERE sim_id = '{SIM_ID}'
-"""))
+'''))
 
 # COMMAND ----------
 
@@ -357,10 +357,10 @@ display(spark.sql(f"""
 
 # COMMAND ----------
 
-display(spark.sql(f"""
+display(spark.sql(f'''
     SELECT * FROM {CATALOG}.tables4env.env_disruption_schedule
     WHERE sim_id = '{SIM_ID}'
-"""))
+'''))
 
 # COMMAND ----------
 

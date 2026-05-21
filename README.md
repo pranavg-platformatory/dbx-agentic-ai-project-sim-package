@@ -26,9 +26,33 @@
 
 **Contents**:
 
+- [Type Checking Specification](#type-checking-specification)
 - [Notes on Certain Packages Used](#notes-on-certain-packages-used)
   - [Pydantic](#pydantic)
   - [`dataclasses`](#dataclasses)
+
+## Type Checking Specification
+Multiple modules have the following lines...
+
+```py
+...
+
+from typing import TYPE_CHECKING
+
+...
+
+if TYPE_CHECKING:
+    from pyspark.sql import SparkSession
+
+...
+```
+
+The `if TYPE_CHECKING` condition allows us to import `SparkSession` strictly for type annotations (like `def my_func(spark: SparkSession): ...`) without actually loading the module at runtime. This prevents the overhead caused by unnecessary imports (since `SparkSession` would be imported by the script/module importing this module).
+
+> **References**:
+>
+> - (Usage example): [Source code for pyspark.sql.udtf, **spark.apache.org/docs/latest/api/python/_modules**](https://spark.apache.org/docs/latest/api/python/_modules/pyspark/sql/udtf.html)
+> - [*Type Checking in Databricks projects. Huge Pain! Solutions?*, **reddit.com/r/databricks**](https://www.reddit.com/r/databricks/comments/1lkw4zi/type_checking_in_databricks_projects_huge_pain/)
 
 ## Notes on Certain Packages Used
 ### Pydantic
@@ -55,7 +79,7 @@ from dataclasses import dataclass
 
 @dataclass
 class InventoryItem:
-    """Class for keeping track of an item in inventory."""
+    '''Class for keeping track of an item in inventory.'''
     name: str
     unit_price: float
     quantity_on_hand: int = 0

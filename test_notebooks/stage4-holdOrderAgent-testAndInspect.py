@@ -169,7 +169,7 @@ print("[DONE] SimWorld written")
 from warehouse_sim.agent.base import AgentContext, BaseAgent, ReorderDecision
 
 class HoldAgent(BaseAgent):
-    """Always holds - useful for verifying engine runs without orders."""
+    '''Always holds - useful for verifying engine runs without orders.'''
     def decide(self, context: AgentContext) -> list[ReorderDecision]:
         return [ReorderDecision(item_id=i, order_qty=0, reasoning="Always hold.")
                 for i in context.items()]
@@ -177,10 +177,10 @@ class HoldAgent(BaseAgent):
         return "hold_agent_v1"
 
 class ReorderAgent(BaseAgent):
-    """
+    '''
     Simple rule: reorder min_order_qty when stock_on_hand < reorder_point
     and no pending orders exist for the item.
-    """
+    '''
     def decide(self, context: AgentContext) -> list[ReorderDecision]:
         decisions = []
         for item_id in context.items():
@@ -232,56 +232,56 @@ print(f"[DONE] HoldAgent run complete ({N_TICKS} ticks)")
 # MAGIC %md ### `ops_warehouse_state` - stock over time
 
 # COMMAND ----------
-display(spark.sql(f"""
+display(spark.sql(f'''
     SELECT *
     FROM {CATALOG}.tables4ops.ops_warehouse_state
     WHERE sim_id = '{SIM_ID}'
     ORDER BY item_id, tick
-"""))
+'''))
 
 # COMMAND ----------
 # MAGIC %md ### `hist_demand_actuals` - demand vs fulfilment
 
 # COMMAND ----------
-display(spark.sql(f"""
+display(spark.sql(f'''
     SELECT *
     FROM {CATALOG}.tables4hist.hist_demand_actuals
     WHERE sim_id = '{SIM_ID}'
     ORDER BY item_id, tick
-"""))
+'''))
 
 # COMMAND ----------
 # MAGIC %md ### `hist_cost_by_tick`
 
 # COMMAND ----------
-display(spark.sql(f"""
+display(spark.sql(f'''
     SELECT *
     FROM {CATALOG}.tables4hist.hist_cost_by_tick
     WHERE sim_id = '{SIM_ID}'
     ORDER BY item_id, tick
-"""))
+'''))
 
 # COMMAND ----------
 # MAGIC %md ### `hist_reorder_decisions` (all holds with HoldAgent)
 
 # COMMAND ----------
-display(spark.sql(f"""
+display(spark.sql(f'''
     SELECT *
     FROM {CATALOG}.tables4hist.hist_reorder_decisions
     WHERE sim_id = '{SIM_ID}'
     ORDER BY item_id, tick
-"""))
+'''))
 
 # COMMAND ----------
 # MAGIC %md ### `event_log` - `TICK_STARTED`/`ENDED` bookending
 
 # COMMAND ----------
-display(spark.sql(f"""
+display(spark.sql(f'''
     SELECT *
     FROM {CATALOG}.tables4eventlog.event_log
     WHERE sim_id = '{SIM_ID}'
     ORDER BY tick, logged_at
-"""))
+'''))
 
 # COMMAND ----------
 # MAGIC %md
@@ -291,10 +291,10 @@ display(spark.sql(f"""
 import json
 
 # -- Warehouse state: n_items rows per tick (tick 0 written at init + each tick)
-ws_rows = spark.sql(f"""
+ws_rows = spark.sql(f'''
     SELECT tick, item_id FROM {CATALOG}.tables4ops.ops_warehouse_state
     WHERE sim_id = '{SIM_ID}' ORDER BY tick, item_id
-""").collect()
+''').collect()
 
 n_items = len(world_rt.items)
 # tick 0 written at `init + ticks 0..N_TICKS-1` written each `tick = N_TICKS+1` total per item
@@ -302,24 +302,24 @@ assert len(ws_rows) == n_items * (N_TICKS + 1), \
     f"Expected {n_items * (N_TICKS + 1)} warehouse state rows, got {len(ws_rows)}"
 
 # -- Stock never negative
-for row in spark.sql(f"""
+for row in spark.sql(f'''
     SELECT * FROM {CATALOG}.tables4ops.ops_warehouse_state
     WHERE sim_id = '{SIM_ID}'
-""").collect():
+''').collect():
     assert row["stock_on_hand"] >= 0, f"Negative stock at tick {row['tick']} item {row['item_id']}"
 
 # -- Demand actuals: exactly `n_items` rows per tick
-da_rows = spark.sql(f"""
+da_rows = spark.sql(f'''
     SELECT COUNT(*) AS cnt FROM {CATALOG}.tables4hist.hist_demand_actuals
     WHERE sim_id = '{SIM_ID}'
-""").collect()[0]["cnt"]
+''').collect()[0]["cnt"]
 assert da_rows == n_items * N_TICKS, f"Expected {n_items * N_TICKS} demand rows, got {da_rows}"
 
 # -- Every tick bookended by TICK_STARTED and TICK_ENDED
-el_rows = spark.sql(f"""
+el_rows = spark.sql(f'''
     SELECT tick, event_type FROM {CATALOG}.tables4eventlog.event_log
     WHERE sim_id = '{SIM_ID}'
-""").collect()
+''').collect()
 for tick in range(N_TICKS):
     types = [r["event_type"] for r in el_rows if r["tick"] == tick]
     assert "TICK_STARTED" in types, f"TICK_STARTED missing at tick {tick}"
@@ -331,34 +331,34 @@ assert "SIM_STARTED" in all_types, "SIM_STARTED missing"
 assert "SIM_ENDED"   in all_types, "SIM_ENDED missing"
 
 # -- `HoldAgent`: no orders placed
-n_orders = spark.sql(f"""
+n_orders = spark.sql(f'''
     SELECT COUNT(*) AS cnt FROM {CATALOG}.tables4ops.ops_pending_orders
     WHERE sim_id = '{SIM_ID}'
-""").collect()[0]["cnt"]
+''').collect()[0]["cnt"]
 assert n_orders == 0, f"HoldAgent should place 0 orders, placed {n_orders}"
 
 # -- `DEMAND_SPIKE` disruption: `item_A` `disrupted_demand` ≈ 2× raw at ticks 4-6
-spike_rows = spark.sql(f"""
+spike_rows = spark.sql(f'''
     SELECT tick, raw_demand, disrupted_demand
     FROM {CATALOG}.tables4hist.hist_demand_actuals
     WHERE sim_id = '{SIM_ID}' AND item_id = 'item_A' AND tick BETWEEN 4 AND 6
     ORDER BY tick
-""").collect()
+''').collect()
 for row in spike_rows:
     assert abs(row["disrupted_demand"] - row["raw_demand"] * 2.0) < 0.01, \
         f"Expected 2× spike at tick {row['tick']}"
 
 # -- Costs: cumulative totals match sum of `hist_cost_by_tick`
 for item_id in world_rt.items:
-    hist_total = spark.sql(f"""
+    hist_total = spark.sql(f'''
         SELECT SUM(total_cost) AS s FROM {CATALOG}.tables4hist.hist_cost_by_tick
         WHERE sim_id = '{SIM_ID}' AND item_id = '{item_id}'
-    """).collect()[0]["s"] or 0.0
-    cum_total = spark.sql(f"""
+    ''').collect()[0]["s"] or 0.0
+    cum_total = spark.sql(f'''
         SELECT cumulative_total_cost FROM {CATALOG}.tables4ops.ops_cost_accumulator
         WHERE sim_id = '{SIM_ID}' AND item_id = '{item_id}'
         ORDER BY tick DESC LIMIT 1
-    """).collect()[0]["cumulative_total_cost"]
+    ''').collect()[0]["cumulative_total_cost"]
     assert abs(hist_total - cum_total) < 0.01, \
         f"{item_id}: hist sum {hist_total:.4f} ≠ cumulative {cum_total:.4f}"
 

@@ -1,4 +1,4 @@
-"""
+'''
 warehouse_sim/eventlog/event_log.py
 
 Append-only event writer for the simulation event log.
@@ -14,7 +14,7 @@ Usage:
     from warehouse_sim.eventlog.event_log import EventLogger
     logger = EventLogger(spark, sim_id="sim_001")
     logger.sim_started(tick=0, config_snapshot={"num_ticks": 30, ...})
-"""
+'''
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ EVENTLOG   = f"{CATALOG}.tables4eventlog"
 TABLE      = f"{EVENTLOG}.event_log"
 
 # Explicit schema - avoids PySpark type inference issues (same lesson as setup.py)
-_SCHEMA = """
+_SCHEMA = '''
     event_id   STRING,
     sim_id     STRING,
     tick       INT,
@@ -45,7 +45,7 @@ _SCHEMA = """
     entity_id  STRING,
     payload    STRING,
     logged_at  TIMESTAMP
-"""
+'''
 
 # Valid event types - matches spec section 7
 EVENT_TYPES = frozenset({
@@ -81,7 +81,7 @@ def _new_id() -> str:
 
 
 def _serialise(payload: dict[str, Any]) -> str:
-    """Serialise payload to JSON string. Handles datetime and other non-standard types."""
+    '''Serialise payload to JSON string. Handles datetime and other non-standard types.'''
     def _default(obj: Any) -> Any:
         if isinstance(obj, datetime):
             return obj.isoformat()
@@ -97,7 +97,7 @@ def _build_row(
     item_id:    str | None   = None,
     entity_id:  str | None   = None,
 ) -> dict:
-    """Build a plain dict representing one event_log row."""
+    '''Build a plain dict representing one event_log row.'''
     if event_type not in EVENT_TYPES:
         raise ValueError(f"Unknown event_type: {event_type!r}")
     return {
@@ -117,12 +117,12 @@ def _build_row(
 # ---------------------------------------------------------------------------
 
 class EventLogger:
-    """
+    '''
     Typed event writer. One instance per simulation run.
     Each public method corresponds to one event type in the spec.
 
     The engine imports and calls this - the logger never calls the engine.
-    """
+    '''
 
     def __init__(self, spark: "SparkSession", sim_id: str) -> None:
         self._spark  = spark
@@ -133,7 +133,7 @@ class EventLogger:
     # ------------------------------------------------------------------
 
     def _write(self, row: dict) -> None:
-        """Append one event row to event_log using an explicit schema."""
+        '''Append one event row to event_log using an explicit schema.'''
         self._spark.createDataFrame([row], schema=_SCHEMA.strip()) \
             .write.mode("append").saveAsTable(TABLE)
 
@@ -393,11 +393,11 @@ def build_event_row(
     item_id:    str | None = None,
     entity_id:  str | None = None,
 ) -> dict:
-    """
+    '''
     Build and return a single event row dict without writing to Spark.
     Used in unit tests and anywhere the row needs to be inspected
     before writing.
-    """
+    '''
     return _build_row(
         sim_id=sim_id,
         tick=tick,

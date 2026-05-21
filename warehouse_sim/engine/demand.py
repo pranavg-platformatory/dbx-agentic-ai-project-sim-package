@@ -1,4 +1,4 @@
-"""
+'''
 warehouse_sim/engine/demand.py
 
 Sub-steps 2 and 3b of the tick sequence:
@@ -11,7 +11,7 @@ Returns a DemandResult per item which the runner uses to:
   - Fire DEMAND_DRAWN and STOCKOUT_OCCURRED events
 
 No agent dependency.
-"""
+'''
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 CATALOG = "hackathon_of_the_century"
 _TABLE  = f"{CATALOG}.tables4hist.hist_demand_actuals"
 
-_SCHEMA = """
+_SCHEMA = '''
     sim_id           STRING,
     tick             INT,
     item_id          STRING,
@@ -44,7 +44,7 @@ _SCHEMA = """
     fulfilled_demand INT,
     unmet_demand     INT,
     pattern_id       STRING
-"""
+'''
 
 
 # ---------------------------------------------------------------------------
@@ -53,9 +53,9 @@ _SCHEMA = """
 
 @dataclass(frozen=True)
 class DemandResult:
-    """
+    '''
     The outcome of drawing and fulfilling demand for one item in one tick.
-    """
+    '''
     item_id:          str
     consumer_id:      str
     pattern_id:       str
@@ -78,7 +78,7 @@ def draw_demand(
     activations:    list[DisruptionActivation],
     sampler:        PatternSampler,
 ) -> DemandResult:
-    """
+    '''
     Draw demand for one item at one tick and compute stock depletion.
 
     Pipeline (spec section 3.5 + suggestions):
@@ -88,7 +88,7 @@ def draw_demand(
       4. fulfilled = min(int_demand, stock_on_hand)
       5. unmet     = int_demand - fulfilled
       6. stock_after = stock_on_hand - fulfilled  (>= 0 guaranteed)
-    """
+    '''
     raw_demand = float(sampler.sample(pattern, tick))  # already floored int, cast back to float for record
 
     # Re-sample as raw float before flooring for the record
@@ -118,7 +118,7 @@ def draw_demand(
 
 
 def _raw_float_sample(pattern: Pattern, tick: int, sampler: PatternSampler) -> float:
-    """
+    '''
     Return the raw float value (base + seasonal + noise) before flooring.
     This is used to populate raw_demand and disrupted_demand in hist_demand_actuals
     with the pre-floor float, matching the spec's column types.
@@ -126,7 +126,7 @@ def _raw_float_sample(pattern: Pattern, tick: int, sampler: PatternSampler) -> f
     NOTE: This draws from the RNG, so call order matters for reproducibility.
     The runner always calls draw_demand (not this directly) - this is an
     internal helper only.
-    """
+    '''
     import math as _math
     from ..config.models import PatternType
 
@@ -161,7 +161,7 @@ def write_demand_actuals(
     results: list[DemandResult],
     consumer_map: dict[str, str],   # item_id -> consumer_id
 ) -> None:
-    """Append demand actuals for this tick to hist_demand_actuals."""
+    '''Append demand actuals for this tick to hist_demand_actuals.'''
     if not results:
         return
 

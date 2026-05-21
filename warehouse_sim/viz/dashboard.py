@@ -1,4 +1,4 @@
-"""
+'''
 warehouse_sim/viz/dashboard.py
 
 Visualisation layer. Reads from hist_* and ops_* tables for a given
@@ -17,7 +17,7 @@ Usage:
     dash.plot_cumulative_cost()
     dash.plot_decisions()
     dash.plot_all()
-"""
+'''
 
 from __future__ import annotations
 
@@ -58,12 +58,12 @@ HOLD_COLOUR       = "#AAAAAA"
 # ---------------------------------------------------------------------------
 
 class SimDashboard:
-    """
+    '''
     Reads simulation output tables for one sim_id and exposes
     one plot method per view.
 
     All DataFrames are loaded lazily and cached on first access.
-    """
+    '''
 
     def __init__(self, spark: "SparkSession", sim_id: str) -> None:
         self._spark  = spark
@@ -88,73 +88,73 @@ class SimDashboard:
     @property
     def stock(self) -> pd.DataFrame:
         if self._df_stock is None:
-            self._df_stock = self._load(f"""
+            self._df_stock = self._load(f'''
                 SELECT tick, item_id, stock_on_hand, stock_in_transit,
                        expected_arrivals_next_tick
                 FROM {self._cat}.tables4ops.ops_warehouse_state
                 WHERE sim_id = '{self._sim_id}'
                 ORDER BY item_id, tick
-            """)
+            ''')
         return self._df_stock
 
     @property
     def demand(self) -> pd.DataFrame:
         if self._df_demand is None:
-            self._df_demand = self._load(f"""
+            self._df_demand = self._load(f'''
                 SELECT tick, item_id, raw_demand, disrupted_demand,
                        fulfilled_demand, unmet_demand
                 FROM {self._cat}.tables4hist.hist_demand_actuals
                 WHERE sim_id = '{self._sim_id}'
                 ORDER BY item_id, tick
-            """)
+            ''')
         return self._df_demand
 
     @property
     def cost_by_tick(self) -> pd.DataFrame:
         if self._df_cost_tick is None:
-            self._df_cost_tick = self._load(f"""
+            self._df_cost_tick = self._load(f'''
                 SELECT tick, item_id, holding_cost, stockout_cost,
                        order_cost, transit_loss_cost, total_cost
                 FROM {self._cat}.tables4hist.hist_cost_by_tick
                 WHERE sim_id = '{self._sim_id}'
                 ORDER BY item_id, tick
-            """)
+            ''')
         return self._df_cost_tick
 
     @property
     def cost_cumulative(self) -> pd.DataFrame:
         if self._df_cost_cum is None:
-            self._df_cost_cum = self._load(f"""
+            self._df_cost_cum = self._load(f'''
                 SELECT tick, item_id, cumulative_total_cost, remaining_budget
                 FROM {self._cat}.tables4ops.ops_cost_accumulator
                 WHERE sim_id = '{self._sim_id}'
                 ORDER BY item_id, tick
-            """)
+            ''')
         return self._df_cost_cum
 
     @property
     def decisions(self) -> pd.DataFrame:
         if self._df_decisions is None:
-            self._df_decisions = self._load(f"""
+            self._df_decisions = self._load(f'''
                 SELECT tick, item_id, decision, order_qty,
                        stock_on_hand_at_decision
                 FROM {self._cat}.tables4hist.hist_reorder_decisions
                 WHERE sim_id = '{self._sim_id}'
                 ORDER BY item_id, tick
-            """)
+            ''')
         return self._df_decisions
 
     @property
     def disruptions(self) -> pd.DataFrame:
         if self._df_disruptions is None:
-            self._df_disruptions = self._load(f"""
+            self._df_disruptions = self._load(f'''
                 SELECT tick, item_id, disruption_type,
                        effective_magnitude, is_active_this_tick
                 FROM {self._cat}.tables4ops.ops_active_disruptions
                 WHERE sim_id = '{self._sim_id}'
                   AND is_active_this_tick = true
                 ORDER BY item_id, tick
-            """)
+            ''')
         return self._df_disruptions
 
     # ------------------------------------------------------------------
@@ -174,7 +174,7 @@ class SimDashboard:
         ax:      plt.Axes,
         item_id: str,
     ) -> None:
-        """Shade disruption-active ticks on an axes."""
+        '''Shade disruption-active ticks on an axes.'''
         if self.disruptions.empty:
             return
         item_dis = self.disruptions[self.disruptions["item_id"] == item_id]
@@ -199,10 +199,10 @@ class SimDashboard:
     # ------------------------------------------------------------------
 
     def plot_stock(self) -> Figure:
-        """
+        '''
         Stock on hand and stock in transit per item, per tick.
         Disruption-active ticks shaded in red.
-        """
+        '''
         items = self._items()
         fig, axes = plt.subplots(
             len(items), 1,
@@ -249,10 +249,10 @@ class SimDashboard:
     # ------------------------------------------------------------------
 
     def plot_demand(self) -> Figure:
-        """
+        '''
         Disrupted demand vs fulfilled demand vs unmet demand per item.
         Unmet demand shown as a stacked red area (stockout signal).
-        """
+        '''
         items = self._items()
         fig, axes = plt.subplots(
             len(items), 1,
@@ -291,9 +291,9 @@ class SimDashboard:
     # ------------------------------------------------------------------
 
     def plot_costs(self) -> Figure:
-        """
+        '''
         Stacked bar chart of cost components per tick per item.
-        """
+        '''
         items      = self._items()
         components = ["holding_cost", "stockout_cost", "order_cost", "transit_loss_cost"]
         labels     = ["Holding", "Stockout", "Order", "Transit loss"]
@@ -335,10 +335,10 @@ class SimDashboard:
     # ------------------------------------------------------------------
 
     def plot_cumulative_cost(self) -> Figure:
-        """
+        '''
         Cumulative total cost per item over the simulation.
         Remaining budget shown as a horizontal dashed line (if applicable).
-        """
+        '''
         items = self._items()
         fig, ax = plt.subplots(figsize=(12, 4))
 
@@ -376,10 +376,10 @@ class SimDashboard:
     # ------------------------------------------------------------------
 
     def plot_decisions(self) -> Figure:
-        """
+        '''
         Reorder decisions over time: order quantity as a bar when reorder,
         zero line for hold. Stock at decision time shown as a line overlay.
-        """
+        '''
         items = self._items()
         fig, axes = plt.subplots(
             len(items), 1,
@@ -432,10 +432,10 @@ class SimDashboard:
     # ------------------------------------------------------------------
 
     def plot_all(self) -> dict[str, Figure]:
-        """
+        '''
         Render all five charts and return them as a dict keyed by name.
         In a Databricks notebook, each figure displays automatically.
-        """
+        '''
         figures = {}
 
         print("Rendering stock levels...")
@@ -465,7 +465,7 @@ class SimDashboard:
     # ------------------------------------------------------------------
 
     def print_summary(self) -> None:
-        """Print a concise run summary to stdout."""
+        '''Print a concise run summary to stdout.'''
         items = self._items()
 
         print(f"\n{'='*55}")

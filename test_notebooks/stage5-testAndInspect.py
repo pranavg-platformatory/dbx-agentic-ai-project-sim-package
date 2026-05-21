@@ -55,10 +55,10 @@ SIM_ID  = "sim_stage3_001"
 # COMMAND ----------
 
 spark.sql(f"ALTER TABLE {CATALOG}.tables4eventlog.event_log SET TBLPROPERTIES (delta.appendOnly=false);")
-spark.sql(f"""
+spark.sql(f'''
     DELETE FROM {CATALOG}.tables4eventlog.event_log
     WHERE sim_id = '{SIM_ID}'
-""")
+''')
 spark.sql(f"ALTER TABLE {CATALOG}.tables4eventlog.event_log SET TBLPROPERTIES (delta.appendOnly=true);")
 print(f"Cleared prior event_log rows for sim_id={SIM_ID!r}")
 
@@ -245,12 +245,12 @@ print("\nAll 16 event types fired.")
 
 # COMMAND ----------
 
-display(spark.sql(f"""
+display(spark.sql(f'''
     SELECT *
     FROM {CATALOG}.tables4eventlog.event_log
     WHERE sim_id = '{SIM_ID}'
     ORDER BY tick, logged_at
-"""))
+'''))
 
 # COMMAND ----------
 
@@ -258,13 +258,13 @@ display(spark.sql(f"""
 
 # COMMAND ----------
 
-display(spark.sql(f"""
+display(spark.sql(f'''
     SELECT event_type, COUNT(*) AS count
     FROM {CATALOG}.tables4eventlog.event_log
     WHERE sim_id = '{SIM_ID}'
     GROUP BY event_type
     ORDER BY event_type
-"""))
+'''))
 
 # COMMAND ----------
 
@@ -272,13 +272,13 @@ display(spark.sql(f"""
 
 # COMMAND ----------
 
-display(spark.sql(f"""
+display(spark.sql(f'''
     SELECT event_id, COUNT(*) AS count
     FROM {CATALOG}.tables4eventlog.event_log
     WHERE sim_id = '{SIM_ID}'
     GROUP BY event_id
     HAVING COUNT(*) > 1
-"""))
+'''))
 
 # COMMAND ----------
 
@@ -286,7 +286,7 @@ display(spark.sql(f"""
 
 # COMMAND ----------
 
-display(spark.sql(f"""
+display(spark.sql(f'''
     SELECT tick,
            SUM(CASE WHEN event_type = 'TICK_STARTED' THEN 1 ELSE 0 END) AS started,
            SUM(CASE WHEN event_type = 'TICK_ENDED'   THEN 1 ELSE 0 END) AS ended
@@ -295,7 +295,7 @@ display(spark.sql(f"""
       AND tick IN (0, 1, 2)
     GROUP BY tick
     ORDER BY tick
-"""))
+'''))
 
 # COMMAND ----------
 
@@ -305,12 +305,12 @@ display(spark.sql(f"""
 
 import json
 
-rows = spark.sql(f"""
+rows = spark.sql(f'''
     SELECT event_type, item_id, entity_id, payload
     FROM {CATALOG}.tables4eventlog.event_log
     WHERE sim_id = '{SIM_ID}'
     ORDER BY logged_at
-""").collect()
+''').collect()
 
 for row in rows:
     p = json.loads(row["payload"])
@@ -325,11 +325,11 @@ for row in rows:
 
 import json
 
-all_rows = spark.sql(f"""
+all_rows = spark.sql(f'''
     SELECT * FROM {CATALOG}.tables4eventlog.event_log
     WHERE sim_id = '{SIM_ID}'
     ORDER BY logged_at
-""").collect()
+''').collect()
 
 event_types_logged = {r["event_type"] for r in all_rows}
 
@@ -394,9 +394,9 @@ print(f"[DONE] All assertions passed - {len(all_rows)} events logged, Stage 3 lo
 # COMMAND ----------
 
 # spark.sql(f"ALTER TABLE {CATALOG}.tables4eventlog.event_log SET TBLPROPERTIES (delta.appendOnly=false);")
-# spark.sql(f"""
+# spark.sql(f'''
 #     DELETE FROM {CATALOG}.tables4eventlog.event_log
 #     WHERE sim_id = '{SIM_ID}'
-# """)
+# ''')
 # spark.sql(f"ALTER TABLE {CATALOG}.tables4eventlog.event_log SET TBLPROPERTIES (delta.appendOnly=true);")
 # print("Teardown complete.")

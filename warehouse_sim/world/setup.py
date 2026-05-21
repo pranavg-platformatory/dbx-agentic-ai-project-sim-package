@@ -1,4 +1,4 @@
-"""
+'''
 warehouse_sim/world/setup.py
 
 Writes a fully constructed SimWorld into the Databricks env tables.
@@ -10,7 +10,7 @@ No engine or agent dependency - only Stage 1 models are imported.
 Usage:
     from warehouse_sim.world.setup import write_world, teardown_world
     write_world(spark, world)
-"""
+'''
 
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ def _t(name: str) -> str:
 # ---------------------------------------------------------------------------
 
 _SCHEMAS = {
-    "env_sim_config": """
+    "env_sim_config": '''
         sim_id                     STRING,
         random_seed                BIGINT,
         num_ticks                  INT,
@@ -63,8 +63,8 @@ _SCHEMAS = {
         agent_history_window_ticks INT,
         start_timestamp            TIMESTAMP,
         created_at                 TIMESTAMP
-    """,
-    "env_item_types": """
+    ''',
+    "env_item_types": '''
         item_id                          STRING,
         item_name                        STRING,
         unit_value                       DOUBLE,
@@ -77,28 +77,28 @@ _SCHEMAS = {
         order_fixed_cost                 DOUBLE,
         order_variable_cost_per_unit     DOUBLE,
         transit_loss_cost_per_unit       DOUBLE
-    """,
-    "env_suppliers": """
+    ''',
+    "env_suppliers": '''
         supplier_id            STRING,
         supplier_name          STRING,
         base_lead_time_ticks   INT,
         lead_time_variability  DOUBLE
-    """,
-    "env_consumers": """
+    ''',
+    "env_consumers": '''
         consumer_id    STRING,
         consumer_name  STRING
-    """,
-    "env_supplier_item_map": """
+    ''',
+    "env_supplier_item_map": '''
         sim_id       STRING,
         supplier_id  STRING,
         item_id      STRING
-    """,
-    "env_consumer_item_map": """
+    ''',
+    "env_consumer_item_map": '''
         sim_id       STRING,
         consumer_id  STRING,
         item_id      STRING
-    """,
-    "env_patterns": """
+    ''',
+    "env_patterns": '''
         pattern_id                    STRING,
         sim_id                        STRING,
         item_id                       STRING,
@@ -110,8 +110,8 @@ _SCHEMAS = {
         seasonal_multiplier_schedule  ARRAY<DOUBLE>,
         noise_std                     DOUBLE,
         supplier_id                   STRING
-    """,
-    "env_disruption_schedule": """
+    ''',
+    "env_disruption_schedule": '''
         disruption_id        STRING,
         sim_id               STRING,
         item_id              STRING,
@@ -121,7 +121,7 @@ _SCHEMAS = {
         magnitude            DOUBLE,
         is_stochastic        BOOLEAN,
         trigger_probability  DOUBLE
-    """,
+    ''',
 }
 
 
@@ -134,21 +134,21 @@ def _now() -> datetime:
 
 
 def _write(spark: "SparkSession", table_key: str, rows: list[dict]) -> None:
-    """
+    '''
     Create a DataFrame from a list of plain dicts using the explicit schema
     for that table, then append to the Delta table.
     Using explicit schemas avoids all PySpark type inference surprises.
-    """
+    '''
     schema = _SCHEMAS[table_key].strip()
     spark.createDataFrame(rows, schema=schema).write.mode("append").saveAsTable(_t(table_key))
 
 
 def _delete_sim_rows(spark: "SparkSession", sim_id: str) -> None:
-    """
+    '''
     Remove all rows scoped to sim_id from tables that carry a sim_id column.
     Tables without sim_id (env_item_types, env_suppliers, env_consumers) are
     NOT touched - those entities are shared across runs.
-    """
+    '''
     for table in [
         "env_sim_config",
         "env_supplier_item_map",
@@ -179,10 +179,10 @@ def _write_sim_config(spark: "SparkSession", config: SimConfig) -> None:
 
 
 def _write_items(spark: "SparkSession", items: dict[str, ItemType]) -> None:
-    """
+    '''
     env_item_types has no sim_id - upsert pattern: delete by item_id then insert.
     Safe because item definitions are expected to be consistent across runs.
-    """
+    '''
     ids_sql = ", ".join(f"'{i}'" for i in items)
     spark.sql(f"DELETE FROM {_t('env_item_types')} WHERE item_id IN ({ids_sql})")
 
@@ -302,7 +302,7 @@ def _write_disruptions(
 # ---------------------------------------------------------------------------
 
 def write_world(spark: "SparkSession", world: SimWorld) -> None:
-    """
+    '''
     Persist a fully constructed SimWorld into the Databricks env tables.
 
     Safe to call repeatedly for the same sim_id - existing rows for this
@@ -313,7 +313,7 @@ def write_world(spark: "SparkSession", world: SimWorld) -> None:
       2. sim config
       3. Mapping tables (scoped by sim_id)
       4. Patterns and disruptions (scoped by sim_id)
-    """
+    '''
     sim_id = world.config.sim_id
 
     # Wipe sim-scoped rows first so re-runs are safe
@@ -345,10 +345,10 @@ def write_world(spark: "SparkSession", world: SimWorld) -> None:
 
 
 def teardown_world(spark: "SparkSession", sim_id: str) -> None:
-    """
+    '''
     Remove all env table rows for a given sim_id.
     Shared entity rows (items, suppliers, consumers) are NOT removed
     as they may be referenced by other sim runs.
-    """
+    '''
     _delete_sim_rows(spark, sim_id)
     print(f"[setup] Teardown complete for sim_id={sim_id!r}")

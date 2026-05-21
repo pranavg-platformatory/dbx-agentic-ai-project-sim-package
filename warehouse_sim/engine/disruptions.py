@@ -1,4 +1,4 @@
-"""
+'''
 warehouse_sim/engine/disruptions.py
 
 Sub-step 0 of the tick sequence: evaluate which disruptions are active
@@ -12,7 +12,7 @@ Multiple disruptions of the same type on the same item are multiplied
 together (spec FR-06 suggestion).
 
 No agent or runner dependency.
-"""
+'''
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 CATALOG = "hackathon_of_the_century"
 _TABLE  = f"{CATALOG}.tables4ops.ops_active_disruptions"
 
-_SCHEMA = """
+_SCHEMA = '''
     sim_id              STRING,
     tick                INT,
     disruption_id       STRING,
@@ -41,7 +41,7 @@ _SCHEMA = """
     disruption_type     STRING,
     effective_magnitude DOUBLE,
     is_active_this_tick BOOLEAN
-"""
+'''
 
 
 # ---------------------------------------------------------------------------
@@ -50,10 +50,10 @@ _SCHEMA = """
 
 @dataclass(frozen=True)
 class DisruptionActivation:
-    """
+    '''
     The resolved activation state of one disruption for one tick.
     Returned by evaluate_disruptions; consumed by runner and other sub-modules.
-    """
+    '''
     disruption_id:       str
     item_id:             str
     disruption_type:     DisruptionType
@@ -70,7 +70,7 @@ def evaluate_disruptions(
     disruptions: list[DisruptionSchedule],
     sampler:     PatternSampler,
 ) -> list[DisruptionActivation]:
-    """
+    '''
     Evaluate all disruptions for the given tick.
 
     Rules (spec section 3.8 + FR-07):
@@ -81,7 +81,7 @@ def evaluate_disruptions(
       - Deterministic disruptions are always active within their window
 
     Returns one DisruptionActivation per in-window disruption.
-    """
+    '''
     in_window = [d for d in disruptions if d.start_tick <= tick <= d.end_tick]
     in_window.sort(key=lambda d: d.disruption_id)  # alphabetical for FR-07
 
@@ -109,11 +109,11 @@ def get_demand_multiplier(
     item_id:     str,
     activations: list[DisruptionActivation],
 ) -> float:
-    """
+    '''
     Net demand multiplier for an item this tick.
     demand_spike and demand_suppression magnitudes are multiplied together.
     Returns 1.0 if no demand disruptions are active.
-    """
+    '''
     multiplier = 1.0
     for a in activations:
         if a.item_id != item_id or not a.is_active_this_tick:
@@ -127,11 +127,11 @@ def get_lead_time_multiplier(
     item_id:     str,
     activations: list[DisruptionActivation],
 ) -> float:
-    """
+    '''
     Net lead time multiplier for an item this tick.
     transit_delay magnitudes are multiplied together.
     Clamped to minimum of 1.0 (spec section 3.6).
-    """
+    '''
     multiplier = 1.0
     for a in activations:
         if a.item_id != item_id or not a.is_active_this_tick:
@@ -145,11 +145,11 @@ def get_transit_loss_fraction(
     item_id:     str,
     activations: list[DisruptionActivation],
 ) -> float:
-    """
+    '''
     Net transit loss fraction for an item this tick.
     transit_loss magnitudes are multiplied together, clamped to [0.0, 1.0].
     Returns 0.0 if no transit loss disruptions are active.
-    """
+    '''
     fraction = 1.0
     has_loss = False
     for a in activations:
@@ -171,7 +171,7 @@ def write_activations(
     tick:        int,
     activations: list[DisruptionActivation],
 ) -> None:
-    """Append disruption activation records for this tick to ops_active_disruptions."""
+    '''Append disruption activation records for this tick to ops_active_disruptions.'''
     if not activations:
         return
 

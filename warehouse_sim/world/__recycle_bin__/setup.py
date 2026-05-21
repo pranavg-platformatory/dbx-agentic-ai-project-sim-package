@@ -1,4 +1,4 @@
-"""
+'''
 warehouse_sim/world/setup.py
 
 Writes a fully constructed SimWorld into the Databricks env tables.
@@ -10,7 +10,7 @@ No engine or agent dependency - only Stage 1 models are imported.
 Usage:
     from warehouse_sim.world.setup import write_world, teardown_world
     write_world(spark, world)
-"""
+'''
 
 from __future__ import annotations
 
@@ -53,17 +53,17 @@ def _now() -> datetime:
 
 
 def _Row(**kwargs):
-    """Lazy Row constructor so this module is importable without PySpark installed."""
+    '''Lazy Row constructor so this module is importable without PySpark installed.'''
     from pyspark.sql import Row
     return Row(**kwargs)
 
 
 def _delete_sim_rows(spark: "SparkSession", sim_id: str) -> None:
-    """
+    '''
     Remove all rows scoped to sim_id from tables that carry a sim_id column.
     Tables without sim_id (env_item_types, env_suppliers, env_consumers) are
     NOT touched - those entities are shared across runs.
-    """
+    '''
     for table in [
         "env_sim_config",
         "env_supplier_item_map",
@@ -95,10 +95,10 @@ def _write_sim_config(spark: "SparkSession", config: SimConfig) -> None:
 
 
 def _write_items(spark: "SparkSession", items: dict[str, ItemType]) -> None:
-    """
+    '''
     env_item_types has no sim_id - upsert pattern: delete by item_id then insert.
     Safe because item definitions are expected to be consistent across runs.
-    """
+    '''
     item_ids = list(items.keys())
     ids_sql  = ", ".join(f"'{i}'" for i in item_ids)
     spark.sql(f"DELETE FROM {_t('env_item_types')} WHERE item_id IN ({ids_sql})")
@@ -226,7 +226,7 @@ def _write_disruptions(
 # ---------------------------------------------------------------------------
 
 def write_world(spark: "SparkSession", world: SimWorld) -> None:
-    """
+    '''
     Persist a fully constructed SimWorld into the Databricks env tables.
 
     Safe to call repeatedly for the same sim_id - existing rows for this
@@ -237,7 +237,7 @@ def write_world(spark: "SparkSession", world: SimWorld) -> None:
       2. sim config
       3. Mapping tables (scoped by sim_id)
       4. Patterns and disruptions (scoped by sim_id)
-    """
+    '''
     sim_id = world.config.sim_id
 
     # Wipe sim-scoped rows first so re-runs are safe
@@ -269,10 +269,10 @@ def write_world(spark: "SparkSession", world: SimWorld) -> None:
 
 
 def teardown_world(spark: "SparkSession", sim_id: str) -> None:
-    """
+    '''
     Remove all env table rows for a given sim_id.
     Shared entity rows (items, suppliers, consumers) are NOT removed
     as they may be referenced by other sim runs.
-    """
+    '''
     _delete_sim_rows(spark, sim_id)
     print(f"[setup] Teardown complete for sim_id={sim_id!r}")

@@ -1,4 +1,4 @@
-"""
+'''
 warehouse_sim/engine/runner.py
 
 The simulation tick loop. Orchestrates all sub-modules in the correct
@@ -19,7 +19,7 @@ Usage:
 
     runner  = SimRunner(spark, world, agent, logger, sampler)
     runner.run()
-"""
+'''
 
 from __future__ import annotations
 
@@ -86,7 +86,7 @@ CATALOG = "hackathon_of_the_century"
 
 _DECISIONS_TABLE  = f"{CATALOG}.tables4hist.hist_reorder_decisions"
 
-_DECISIONS_SCHEMA = """
+_DECISIONS_SCHEMA = '''
     sim_id                       STRING,
     tick                         INT,
     item_id                      STRING,
@@ -98,7 +98,7 @@ _DECISIONS_SCHEMA = """
     order_id                     STRING,
     agent_reasoning              STRING,
     agent_version                STRING
-"""
+'''
 
 
 # ---------------------------------------------------------------------------
@@ -106,7 +106,7 @@ _DECISIONS_SCHEMA = """
 # ---------------------------------------------------------------------------
 
 class SimRunner:
-    """
+    '''
     Orchestrates the simulation tick loop.
 
     Parameters
@@ -116,7 +116,7 @@ class SimRunner:
     agent   : any BaseAgent subclass - injected, never imported directly
     logger  : EventLogger instance for this sim run
     sampler : PatternSampler seeded with world.config.random_seed
-    """
+    '''
 
     def __init__(
         self,
@@ -152,10 +152,10 @@ class SimRunner:
     # ------------------------------------------------------------------
 
     def run(self) -> None:
-        """
+        '''
         Execute the simulation. Runs for config.num_ticks ticks when
         run_mode is 'finite', or forever when 'infinite' or 'cyclic'.
-        """
+        '''
         self._initialise()
 
         tick = 0
@@ -170,7 +170,7 @@ class SimRunner:
     # ------------------------------------------------------------------
 
     def _initialise(self) -> None:
-        """Set up in-memory state and fire SIM_STARTED."""
+        '''Set up in-memory state and fire SIM_STARTED.'''
         self._stock_states = initialise_states(self._spark, self._sim_id, self._world)
         self._cost_states  = {
             item_id: CostState(item_id=item_id)
@@ -490,11 +490,11 @@ class SimRunner:
     # ------------------------------------------------------------------
 
     def _update_expected_arrivals(self, tick: int) -> None:
-        """
+        '''
         Compute expected_arrivals_next_tick for each item by querying
         the in-flight pending orders that are due at tick+1.
         We query ops_pending_orders rather than keeping a separate structure.
-        """
+        '''
         pending = fetch_pending_orders(self._spark, self._sim_id)
         next_tick = tick + 1
         for item_id, state in self._stock_states.items():
@@ -509,7 +509,7 @@ class SimRunner:
         tick:        int,
         activations: list[DisruptionActivation],
     ) -> AgentContext:
-        """Assemble the AgentContext the agent will receive."""
+        '''Assemble the AgentContext the agent will receive.'''
 
         # -- Item states
         item_states = {
@@ -586,23 +586,23 @@ class SimRunner:
         tick:   int,
         window: Optional[int],
     ) -> dict[str, list[DemandRecord]]:
-        """
+        '''
         Read demand history from hist_demand_actuals.
         Returns last `window` ticks per item (all if window is None).
-        """
+        '''
         if window is not None:
             min_tick = tick - window
             where    = f"AND tick > {min_tick}"
         else:
             where = ""
 
-        rows = self._spark.sql(f"""
+        rows = self._spark.sql(f'''
             SELECT tick, item_id, raw_demand, disrupted_demand,
                    fulfilled_demand, unmet_demand
             FROM {CATALOG}.tables4hist.hist_demand_actuals
             WHERE sim_id = '{self._sim_id}' {where}
             ORDER BY tick ASC
-        """).collect()
+        ''').collect()
 
         history: dict[str, list[DemandRecord]] = {}
         for row in rows:
@@ -622,7 +622,7 @@ class SimRunner:
         tick:        int,
         activations: list[DisruptionActivation],
     ) -> None:
-        """Fire DISRUPTION_ACTIVATED for newly triggered disruptions."""
+        '''Fire DISRUPTION_ACTIVATED for newly triggered disruptions.'''
         for a in activations:
             if a.is_active_this_tick:
                 self._logger.disruption_activated(
@@ -672,7 +672,7 @@ class SimRunner:
             .write.mode("append").saveAsTable(_DECISIONS_TABLE)
 
     def _check_budget_events(self, tick: int) -> None:
-        """Fire BUDGET_WARNING and BUDGET_EXHAUSTED events as needed."""
+        '''Fire BUDGET_WARNING and BUDGET_EXHAUSTED events as needed.'''
         if self._remaining_budget is None:
             return
 
@@ -700,10 +700,10 @@ class SimRunner:
         decisions: list[ReorderDecision],
         context:   AgentContext,
     ) -> None:
-        """
+        '''
         Ensure the agent returned exactly one decision per item and that
         order quantities are within bounds.
-        """
+        '''
         decided_items = {d.item_id for d in decisions}
         expected      = set(context.items())
 

@@ -285,10 +285,10 @@ write_world(spark, world)
 
 # COMMAND ----------
 
-display(spark.sql(f"""
+display(spark.sql(f'''
     SELECT * FROM {CATALOG}.tables4env.env_sim_config
     WHERE sim_id = '{SIM_ID}'
-"""))
+'''))
 
 # COMMAND ----------
 
@@ -296,11 +296,11 @@ display(spark.sql(f"""
 
 # COMMAND ----------
 
-display(spark.sql(f"""
+display(spark.sql(f'''
     SELECT * FROM {CATALOG}.tables4env.env_item_types
     WHERE item_id IN ('item_A', 'item_B', 'item_C')
     ORDER BY item_id
-"""))
+'''))
 
 # COMMAND ----------
 
@@ -308,12 +308,12 @@ display(spark.sql(f"""
 
 # COMMAND ----------
 
-display(spark.sql(f"""
+display(spark.sql(f'''
     SELECT *
     FROM {CATALOG}.tables4env.env_suppliers
     WHERE supplier_id IN ('sup_001', 'sup_002')
     ORDER BY supplier_id
-"""))
+'''))
 
 # COMMAND ----------
 
@@ -321,7 +321,7 @@ display(spark.sql(f"""
 
 # COMMAND ----------
 
-display(spark.sql(f"""
+display(spark.sql(f'''
     SELECT s.item_id,
            s.supplier_id, sup.supplier_name, sup.base_lead_time_ticks,
            c.consumer_id, con.consumer_name
@@ -332,7 +332,7 @@ display(spark.sql(f"""
     JOIN {CATALOG}.tables4env.env_consumers con ON c.consumer_id = con.consumer_id
     WHERE s.sim_id = '{SIM_ID}'
     ORDER BY s.item_id
-"""))
+'''))
 
 # COMMAND ----------
 
@@ -340,12 +340,12 @@ display(spark.sql(f"""
 
 # COMMAND ----------
 
-display(spark.sql(f"""
+display(spark.sql(f'''
     SELECT *
     FROM {CATALOG}.tables4env.env_patterns
     WHERE sim_id = '{SIM_ID}'
     ORDER BY item_id
-"""))
+'''))
 
 # COMMAND ----------
 
@@ -353,12 +353,12 @@ display(spark.sql(f"""
 
 # COMMAND ----------
 
-display(spark.sql(f"""
+display(spark.sql(f'''
     SELECT *
     FROM {CATALOG}.tables4env.env_disruption_schedule
     WHERE sim_id = '{SIM_ID}'
     ORDER BY item_id
-"""))
+'''))
 
 # COMMAND ----------
 

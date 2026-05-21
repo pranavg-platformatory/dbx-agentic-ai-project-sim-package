@@ -1,10 +1,10 @@
-"""
+'''
 warehouse_sim/config/models.py
 
-Pydantic v2 data models for every entity in the simulation schema.
-These are the canonical typed representations used throughout the package.
-No Databricks dependency - pure Python.
-"""
+- Pydantic v2 data models for every entity in the simulation schema
+- These are the canonical typed representations used throughout the package
+- No Databricks dependency - pure Python
+'''
 
 from __future__ import annotations
 
@@ -14,9 +14,8 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
-
 # ---------------------------------------------------------------------------
-# Enums
+# Enumerators
 # ---------------------------------------------------------------------------
 
 class RunMode(str, Enum):
@@ -73,7 +72,8 @@ class AgentDecision(str, Enum):
 # ---------------------------------------------------------------------------
 
 class SimConfig(BaseModel):
-    """Maps to env_sim_config."""
+    '''Maps to the table "env_sim_config" (catalog and schema are specified in the module `config/loader.py`).'''
+
     sim_id:                     str
     random_seed:                int
     num_ticks:                  Optional[int]   = None   # None = infinite
@@ -97,9 +97,9 @@ class SimConfig(BaseModel):
             raise ValueError("budget_warning_threshold must be in (0.0, 1.0]")
         return self
 
-
 class ItemType(BaseModel):
-    """Maps to env_item_types."""
+    '''Maps to env_item_types.'''
+    
     item_id:                         str
     item_name:                       str
     unit_value:                      float  = Field(ge=0)
@@ -119,37 +119,37 @@ class ItemType(BaseModel):
             raise ValueError("max_order_qty must be >= min_order_qty")
         return self
 
-
 class Supplier(BaseModel):
-    """Maps to env_suppliers."""
+    '''Maps to "env_suppliers" (catalog and schema are specified in the module `config/loader.py`)..'''
+
     supplier_id:           str
     supplier_name:         str
     base_lead_time_ticks:  int   = Field(ge=1)
     lead_time_variability: float = Field(ge=0)
 
-
 class Consumer(BaseModel):
-    """Maps to env_consumers."""
+    '''Maps to "env_consumers" (catalog and schema are specified in the module `config/loader.py`).'''
+    
     consumer_id:   str
     consumer_name: str
 
-
 class SupplierItemMapping(BaseModel):
-    """Maps to env_supplier_item_map."""
+    '''Maps to "env_supplier_item_map" (catalog and schema are specified in the module `config/loader.py`).'''
+    
     sim_id:      str
     supplier_id: str
     item_id:     str
 
-
 class ConsumerItemMapping(BaseModel):
-    """Maps to env_consumer_item_map."""
+    '''Maps to "env_consumer_item_map" (catalog and schema are specified in the module `config/loader.py`).'''
+    
     sim_id:      str
     consumer_id: str
     item_id:     str
 
-
 class Pattern(BaseModel):
-    """Maps to env_patterns."""
+    '''Maps to "env_patterns" (catalog and schema are specified in the module `config/loader.py`).'''
+    
     pattern_id:                   str
     sim_id:                       str
     item_id:                      str
@@ -178,7 +178,8 @@ class Pattern(BaseModel):
 
 
 class DisruptionSchedule(BaseModel):
-    """Maps to env_disruption_schedule."""
+    '''Maps to "env_disruption_schedule" (catalog and schema are specified in the module `config/loader.py`)..'''
+
     disruption_id:       str
     sim_id:              str
     item_id:             str
@@ -212,11 +213,12 @@ class DisruptionSchedule(BaseModel):
 # ---------------------------------------------------------------------------
 
 class SimWorld(BaseModel):
-    """
-    Fully resolved world configuration for a single simulation run.
-    Assembled by the loader from all env tables.
-    This is what the engine receives at startup.
-    """
+    '''
+    - Fully resolved world configuration for a single simulation run
+    - Assembled by the loader from all env tables
+    - This is what the engine receives at startup
+    '''
+
     config:            SimConfig
     items:             dict[str, ItemType]        # keyed by item_id
     suppliers:         dict[str, Supplier]        # keyed by supplier_id
@@ -236,5 +238,16 @@ class SimWorld(BaseModel):
         return self.consumers[consumer_id]
 
     def disruptions_for_tick(self, tick: int) -> list[DisruptionSchedule]:
-        """Return all disruptions whose window includes the given tick."""
+        '''
+        Return all disruptions whose window includes the given tick.
+        
+        ---
+
+        PARAMETERS:
+        - `tick` (int): Simulation tick number
+
+        RETURNS:
+        - (list[DisruptionSchedule]): List of disruption schedules in chronological order
+        '''
+
         return [d for d in self.disruptions if d.start_tick <= tick <= d.end_tick]

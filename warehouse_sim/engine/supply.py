@@ -1,4 +1,4 @@
-"""
+'''
 warehouse_sim/engine/supply.py
 
 Sub-step 1 of the tick sequence: process pending order arrivals.
@@ -14,7 +14,7 @@ agent decides to reorder. Computes effective lead time (with disruption
 multiplier and floor), inserts into ops_pending_orders.
 
 No agent dependency.
-"""
+'''
 
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ CATALOG = "hackathon_of_the_century"
 _PENDING_TABLE  = f"{CATALOG}.tables4ops.ops_pending_orders"
 _ARRIVALS_TABLE = f"{CATALOG}.tables4hist.hist_supply_arrivals"
 
-_PENDING_SCHEMA = """
+_PENDING_SCHEMA = '''
     order_id                  STRING,
     sim_id                    STRING,
     item_id                   STRING,
@@ -49,9 +49,9 @@ _PENDING_SCHEMA = """
     order_qty                 INT,
     status                    STRING,
     disruptions_active_at_order ARRAY<STRING>
-"""
+'''
 
-_ARRIVALS_SCHEMA = """
+_ARRIVALS_SCHEMA = '''
     sim_id                STRING,
     tick                  INT,
     order_id              STRING,
@@ -61,7 +61,7 @@ _ARRIVALS_SCHEMA = """
     arrived_qty           INT,
     lost_qty              INT,
     actual_lead_time_ticks INT
-"""
+'''
 
 
 # ---------------------------------------------------------------------------
@@ -70,7 +70,7 @@ _ARRIVALS_SCHEMA = """
 
 @dataclass(frozen=True)
 class ArrivalResult:
-    """The outcome of processing one arriving order."""
+    '''The outcome of processing one arriving order.'''
     order_id:    str
     item_id:     str
     supplier_id: str
@@ -84,7 +84,7 @@ class ArrivalResult:
 
 @dataclass(frozen=True)
 class PlacedOrder:
-    """A newly placed reorder, returned by place_order()."""
+    '''A newly placed reorder, returned by place_order().'''
     order_id:              str
     item_id:               str
     supplier_id:           str
@@ -103,7 +103,7 @@ def process_arrivals(
     pending_orders: list[dict],        # raw dicts from ops_pending_orders
     activations:    list[DisruptionActivation],
 ) -> list[ArrivalResult]:
-    """
+    '''
     Identify orders arriving this tick and apply transit loss.
 
     Parameters
@@ -113,7 +113,7 @@ def process_arrivals(
     activations     : disruption activations for this tick (from sub-step 0)
 
     Returns list of ArrivalResult for orders arriving this tick.
-    """
+    '''
     results: list[ArrivalResult] = []
 
     for order in pending_orders:
@@ -163,7 +163,7 @@ def place_order(
     activations:          list[DisruptionActivation],
     sampler:              PatternSampler,
 ) -> PlacedOrder:
-    """
+    '''
     Compute effective lead time and construct a PlacedOrder.
 
     Lead time formula (spec section 3.6):
@@ -171,7 +171,7 @@ def place_order(
       effective = actual × max(1.0, lead_time_multiplier)
 
     Returns a PlacedOrder - the runner writes it to ops_pending_orders.
-    """
+    '''
     actual_lt    = sampler.sample_lead_time(base_lead_time_ticks, lead_time_variability)
     lt_mult      = get_lead_time_multiplier(item_id, activations)
     effective_lt = math.ceil(actual_lt * lt_mult)   # ceil so multiplier never rounds to 0
@@ -201,7 +201,7 @@ def write_placed_order(
     sim_id: str,
     order:  PlacedOrder,
 ) -> None:
-    """Insert a new pending order into ops_pending_orders."""
+    '''Insert a new pending order into ops_pending_orders.'''
     rows = [{
         "order_id":                   order.order_id,
         "sim_id":                     sim_id,
@@ -222,14 +222,14 @@ def update_order_status(
     sim_id:  str,
     results: list[ArrivalResult],
 ) -> None:
-    """Update ops_pending_orders status for arrived orders."""
+    '''Update ops_pending_orders status for arrived orders.'''
     for r in results:
-        spark.sql(f"""
+        spark.sql(f'''
             UPDATE {_PENDING_TABLE}
             SET status = '{r.status}'
             WHERE sim_id = '{sim_id}'
               AND order_id = '{r.order_id}'
-        """)
+        ''')
 
 
 def write_arrivals(
@@ -238,7 +238,7 @@ def write_arrivals(
     tick:    int,
     results: list[ArrivalResult],
 ) -> None:
-    """Append arrival records to hist_supply_arrivals."""
+    '''Append arrival records to hist_supply_arrivals.'''
     if not results:
         return
 
@@ -264,12 +264,12 @@ def fetch_pending_orders(
     spark:  "SparkSession",
     sim_id: str,
 ) -> list[dict]:
-    """Read all pending (undelivered) orders for this sim from ops_pending_orders."""
+    '''Read all pending (undelivered) orders for this sim from ops_pending_orders.'''
     return [
         row.asDict()
-        for row in spark.sql(f"""
+        for row in spark.sql(f'''
             SELECT * FROM {_PENDING_TABLE}
             WHERE sim_id = '{sim_id}'
               AND status = 'pending'
-        """).collect()
+        ''').collect()
     ]

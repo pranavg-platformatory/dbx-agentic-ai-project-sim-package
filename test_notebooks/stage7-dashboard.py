@@ -194,7 +194,7 @@ display(fig)
 
 # COMMAND ----------
 
-display(spark.sql(f"""
+display(spark.sql(f'''
     SELECT item_id,
            MAX(tick)                                         AS final_tick,
            MAX_BY(stock_on_hand, tick)                      AS final_stock,
@@ -203,7 +203,7 @@ display(spark.sql(f"""
     WHERE sim_id = '{SIM_ID}'
     GROUP BY item_id
     ORDER BY item_id
-"""))
+'''))
 
 # COMMAND ----------
 
@@ -211,7 +211,7 @@ display(spark.sql(f"""
 
 # COMMAND ----------
 
-display(spark.sql(f"""
+display(spark.sql(f'''
     SELECT item_id,
            SUM(unmet_demand)     AS total_unmet,
            SUM(fulfilled_demand) AS total_fulfilled,
@@ -220,7 +220,7 @@ display(spark.sql(f"""
     WHERE sim_id = '{SIM_ID}'
     GROUP BY item_id
     ORDER BY item_id
-"""))
+'''))
 
 # COMMAND ----------
 
@@ -228,7 +228,7 @@ display(spark.sql(f"""
 
 # COMMAND ----------
 
-display(spark.sql(f"""
+display(spark.sql(f'''
     SELECT item_id,
            SUM(holding_cost)      AS total_holding,
            SUM(stockout_cost)     AS total_stockout,
@@ -239,7 +239,7 @@ display(spark.sql(f"""
     WHERE sim_id = '{SIM_ID}'
     GROUP BY item_id
     ORDER BY item_id
-"""))
+'''))
 
 # COMMAND ----------
 
@@ -247,7 +247,7 @@ display(spark.sql(f"""
 
 # COMMAND ----------
 
-display(spark.sql(f"""
+display(spark.sql(f'''
     SELECT item_id,
            decision,
            COUNT(*)        AS count,
@@ -256,7 +256,7 @@ display(spark.sql(f"""
     WHERE sim_id = '{SIM_ID}'
     GROUP BY item_id, decision
     ORDER BY item_id, decision
-"""))
+'''))
 
 # COMMAND ----------
 
@@ -264,13 +264,13 @@ display(spark.sql(f"""
 
 # COMMAND ----------
 
-display(spark.sql(f"""
+display(spark.sql(f'''
     SELECT event_type, COUNT(*) AS count
     FROM {CATALOG}.tables4eventlog.event_log
     WHERE sim_id = '{SIM_ID}'
     GROUP BY event_type
     ORDER BY count DESC
-"""))
+'''))
 
 # COMMAND ----------
 
@@ -283,45 +283,45 @@ display(spark.sql(f"""
 # COMMAND ----------
 
 # Stock never negative
-min_stock = spark.sql(f"""
+min_stock = spark.sql(f'''
     SELECT MIN(stock_on_hand) AS min_stock
     FROM {CATALOG}.tables4ops.ops_warehouse_state
     WHERE sim_id = '{SIM_ID}'
-""").collect()[0]["min_stock"]
+''').collect()[0]["min_stock"]
 assert min_stock >= 0, f"Negative stock found: {min_stock}"
 
 # `hist_cost_by_tick` total matches `ops_cost_accumulator` final cumulative
 for item_id in dash._items():
-    hist_total = spark.sql(f"""
+    hist_total = spark.sql(f'''
         SELECT SUM(total_cost) AS s
         FROM {CATALOG}.tables4hist.hist_cost_by_tick
         WHERE sim_id = '{SIM_ID}' AND item_id = '{item_id}'
-    """).collect()[0]["s"] or 0.0
+    ''').collect()[0]["s"] or 0.0
 
-    cum_total = spark.sql(f"""
+    cum_total = spark.sql(f'''
         SELECT cumulative_total_cost
         FROM {CATALOG}.tables4ops.ops_cost_accumulator
         WHERE sim_id = '{SIM_ID}' AND item_id = '{item_id}'
         ORDER BY tick DESC LIMIT 1
-    """).collect()[0]["cumulative_total_cost"]
+    ''').collect()[0]["cumulative_total_cost"]
 
     assert abs(hist_total - cum_total) < 0.01, \
         f"{item_id}: per-tick sum {hist_total:.4f} ≠ cumulative {cum_total:.4f}"
 
 # Every demand tick has `fulfilled + unmet = floor(disrupted_demand)`
-bad_demand = spark.sql(f"""
+bad_demand = spark.sql(f'''
     SELECT COUNT(*) AS n
     FROM {CATALOG}.tables4hist.hist_demand_actuals
     WHERE sim_id = '{SIM_ID}'
       AND (fulfilled_demand + unmet_demand) != CAST(FLOOR(disrupted_demand) AS INT)
-""").collect()[0]["n"]
+''').collect()[0]["n"]
 assert bad_demand == 0, f"{bad_demand} demand rows have inconsistent fulfilled+unmet"
 
 # `SIM_STARTED` and `SIM_ENDED` both present
-event_types = {r["event_type"] for r in spark.sql(f"""
+event_types = {r["event_type"] for r in spark.sql(f'''
     SELECT DISTINCT event_type FROM {CATALOG}.tables4eventlog.event_log
     WHERE sim_id = '{SIM_ID}'
-""").collect()}
+''').collect()}
 assert "SIM_STARTED" in event_types, "SIM_STARTED missing from event_log"
 assert "SIM_ENDED"   in event_types, "SIM_ENDED missing from event_log"
 

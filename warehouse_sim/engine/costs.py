@@ -27,12 +27,12 @@ SIMULATION LOOP (per tick)
 KEY POINTS:
 
 Cost components per tick (spec section 3.7, __docs__/simulationSpecs.md):
-- `holding`      = `stock_on_hand` (end of tick) × `holding_cost_per_unit_per_tick`
-- `stockout`     = `unmet_demand` × `stockout_cost_per_unit_per_tick`
-- `order`        = `order_fixed_cost` + (`order_qty` × `order_variable_cost_per_unit`) \n
-                   NOTE: Charged at placement; 0 if no order placed this tick
-- `transit_loss` = `lost_qty` × `transit_loss_cost_per_unit` \n
-                   NOTE: Charged at arrival; 0 if no transit loss this tick
+- holding      = `stock_on_hand` (end of tick) × `holding_cost_per_unit_per_tick`
+- stockout     = `unmet_demand` × `stockout_cost_per_unit_per_tick`
+- order        = `order_fixed_cost` + (`order_qty` × `order_variable_cost_per_unit`) \n
+                   NOTE: Charged at order placement; 0 if no order placed this tick
+- transit_loss = `lost_qty` × `transit_loss_cost_per_unit` \n
+                   NOTE: Charged at order arrival; 0 if no transit loss this tick
 
 ---
 
@@ -41,8 +41,7 @@ NOTE: No agent dependency.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
 from typing import Optional, TYPE_CHECKING
 
 from ..config.models import ItemType
@@ -91,8 +90,10 @@ _HIST_SCHEMA = '''
 class CostState:
     '''
     Mutable in-memory cumulative cost totals for one item.
-    The runner updates these each tick and writes a snapshot.
+    
+    NOTE: The runner updates these each tick and writes a snapshot.
     '''
+
     item_id:                      str
     cumulative_holding_cost:      float = 0.0
     cumulative_stockout_cost:     float = 0.0
@@ -108,30 +109,89 @@ class CostState:
             + self.cumulative_transit_loss_cost
         )
 
-
 # ---------------------------------------------------------------------------
 # Per-component cost calculators (pure Python - no Spark)
 # ---------------------------------------------------------------------------
 
 def compute_holding_cost(stock_on_hand: int, item: ItemType) -> float:
-    '''Holding cost on end-of-tick stock (spec: post-arrival, post-demand).'''
+    '''
+    Holding cost for the specified item type on end-of-tick stock (post-arrival, post-demand).
+    
+    `holding_cost` = `stock_on_hand` (end of tick) × `holding_cost_per_unit_per_tick` (for the specified item)
+    
+    ---
+
+    PARAMETERS:
+    - `stock_in_hand` (int): The quantity of the specified item type present (in hand) in the stock at the end of the simulation tick
+    - `item` (ItemType): ItemType instance encapsulating the specifications for a specific item type
+
+    RETURNS:
+    - (float): Holding cost for the item type
+    '''
+
     return stock_on_hand * item.holding_cost_per_unit_per_tick
 
 
 def compute_stockout_cost(unmet_demand: int, item: ItemType) -> float:
-    '''Penalty per unit of unmet demand.'''
+    '''
+    Penalty per unit of unmet demand.
+    
+    `stockout_cost` = `unmet_demand` × `stockout_cost_per_unit_per_tick`
+
+    ---
+
+    PARAMETERS:
+    - `unmet_demand` (int): Total Demand - Fulfilled Demand (for the specified item type)
+    - `item` (ItemType): ItemType instance encapsulating the specifications for a specific item type
+    
+    RETURNS:
+    - (float): Stockout cost for the item type
+    '''
+
     return unmet_demand * item.stockout_cost_per_unit_per_tick
 
 
 def compute_order_cost(order_qty: int, item: ItemType) -> float:
-    '''Fixed + variable cost at placement. 0 if no order placed (order_qty=0).'''
+    '''
+    Fixed + variable cost at placement. 0 if no order placed (order_qty=0).
+    
+    `order_cost` = `order_fixed_cost` + (`order_qty` × `order_variable_cost_per_unit`)
+    
+    NOTE: This is charged at order placement; 0 if no order placed this tick.
+    
+    ---
+
+    PARAMETERS:
+    - `order_qty` (int): Number of items ordered for the specified item type
+    - `item` (ItemType): ItemType instance encapsulating the specifications for a specific item type
+    
+    RETURNS:
+    - (float): Order cost (i.e. cost of placing the order) for the item type
+    '''
+
     if order_qty == 0:
         return 0.0
     return item.order_fixed_cost + (order_qty * item.order_variable_cost_per_unit)
 
 
 def compute_transit_loss_cost(lost_qty: int, item: ItemType) -> float:
-    '''Cost per unit lost in transit. 0 if no transit loss.'''
+    '''
+    Cost per unit lost in transit. 0 if no transit loss.
+
+    `transit_loss` = `lost_qty` × `transit_loss_cost_per_unit`
+    
+    NOTE: This is charged at order arrival; 0 if no transit loss this tick.
+
+    ---
+
+    PARAMETERS:
+    - `order_qty` (int): Number of items ordered for the specified item type
+    - `item` (ItemType): ItemType instance encapsulating the specifications for a specific item type
+    
+    RETURNS:
+    - (float): Transit loss cost for the item type
+    '''
+
     return lost_qty * item.transit_loss_cost_per_unit
 
 
@@ -144,9 +204,27 @@ def accumulate(
 ) -> tuple[float, float, float, float]:
     '''
     Add this tick's costs to the running totals.
-    Mutates cost_state in place.
-    Returns the four per-tick costs for hist_cost_by_tick.
+
+    What it does:
+    - Mutates `cost_state` in place
+    - Returns the four per-tick costs (which is useful for the table :hist_cost_by_tick")
+
+    ---
+
+    PARAMETERS:
+    - `cost_state` (CostState): CostState instance encapsulating mutable in-memory cumulative cost totals for a specific item item
+    - `holding_cost` (float): Holding cost for this tick (see the docstring of `compute_holding_cost`)
+    - `stockout_cost` (float): Stockout cost for this tick (see the docstring of `compute_stockout_cost`)
+    - `order_cost` (float): Order cost for this tick (see the docstring of `compute_order_cost`)
+    - `transit_loss_cost` (float): Holding cost for this tick (see the docstring of `compute_transit_loss_cost`)
+
+    RETURNS:
+    - (float): Holding cost for this tick
+    - (float): Stockout cost for this tick
+    - (float): Order cost for this tick
+    - (float): Transit cost for this tick
     '''
+
     cost_state.cumulative_holding_cost      += holding_cost
     cost_state.cumulative_stockout_cost     += stockout_cost
     cost_state.cumulative_order_cost        += order_cost
@@ -171,7 +249,19 @@ def deduct_budget(
     remaining_budget: Optional[float],
     cost:             float,
 ) -> Optional[float]:
-    '''Deduct cost from remaining_budget. Returns None if unlimited.'''
+    '''
+    Deduct cost from remaining_budget; return None if unlimited.
+    
+    ---
+
+    PARAMETERS:
+    - `remaining_budget` (float, optional): Remaining budget for the simulation run (before cost deduction)
+    - `cost` (float): Cost (can be any cost component, per tick or cumulative; this function is agnostic to such details)
+    
+    RETURNS:
+    - (float, optional): Remaining budget for the simulation run (after cost deduction); 0 if the remaining budget (after cost deduction) is negative
+    '''
+
     if remaining_budget is None:
         return None
     return max(0.0, remaining_budget - cost)
@@ -188,7 +278,22 @@ def write_cost_accumulator(
     cost_states:      dict[str, CostState],
     remaining_budget: Optional[float],
 ) -> None:
-    '''Append cumulative cost row per item for this tick to ops_cost_accumulator.'''
+    '''
+    Append cumulative cost row per item for this tick to the table "ops_cost_accumulator".
+    
+    ---
+
+    PARAMETERS:
+    - `spark` (SparkSession): SparkSession instance handling Spark operations
+    - `sim_id` (str): Simulation ID
+    - `tick` (int): Simulation tick number
+    - `cost_states` (dict[str, CostState]): Dictionary linking item type (identified by item IDs) to their respective CostState instances
+    - `remaining_budget` (float, optional): 
+
+    Returns:
+    - None
+    '''
+    
     rows = [
         {
             "sim_id":                       sim_id,
@@ -213,7 +318,22 @@ def write_cost_by_tick(
     tick:        int,
     tick_costs:  dict[str, dict],   # item_id -> {holding, stockout, order, transit_loss}
 ) -> None:
-    '''Append per-tick cost breakdown per item to hist_cost_by_tick.'''
+    '''
+    Append per-tick cost breakdown per item to the table "hist_cost_by_tick".
+    
+    ---
+
+    PARAMETERS:
+    - `spark` (SparkSession): SparkSession instance handling Spark operations
+    - `sim_id` (str): Simulation ID
+    - `tick` (int): Simulation tick number
+    - `tick_costs` (dict[str, dict]): Dictionary linking item type (identified by item IDs) to a dictionary containing the cost components for this tick \n
+      NOTE: The dictionary of cost components links cost component names to their values for this tick, e.g.: `"stockout_cost": 4`
+
+    Returns:
+    - None
+    '''
+
     rows = [
         {
             "sim_id":            sim_id,

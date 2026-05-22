@@ -101,7 +101,7 @@ class SimConfig(BaseModel):
         return self
 
 class ItemType(BaseModel):
-    '''Maps to env_item_types.'''
+    '''Maps to the table "env_item_types" (catalog and schema are specified in the module `config/loader.py`).'''
     
     item_id:                         str
     item_name:                       str
@@ -123,7 +123,7 @@ class ItemType(BaseModel):
         return self
 
 class Supplier(BaseModel):
-    '''Maps to "env_suppliers" (catalog and schema are specified in the module `config/loader.py`)..'''
+    '''Maps to the table "env_suppliers" (catalog and schema are specified in the module `config/loader.py`).'''
 
     supplier_id:           str
     supplier_name:         str
@@ -131,27 +131,27 @@ class Supplier(BaseModel):
     lead_time_variability: float = Field(ge=0)
 
 class Consumer(BaseModel):
-    '''Maps to "env_consumers" (catalog and schema are specified in the module `config/loader.py`).'''
+    '''Maps to the table "env_consumers" (catalog and schema are specified in the module `config/loader.py`).'''
     
     consumer_id:   str
     consumer_name: str
 
 class SupplierItemMapping(BaseModel):
-    '''Maps to "env_supplier_item_map" (catalog and schema are specified in the module `config/loader.py`).'''
+    '''Maps to the table "env_supplier_item_map" (catalog and schema are specified in the module `config/loader.py`).'''
     
     sim_id:      str
     supplier_id: str
     item_id:     str
 
 class ConsumerItemMapping(BaseModel):
-    '''Maps to "env_consumer_item_map" (catalog and schema are specified in the module `config/loader.py`).'''
+    '''Maps to the table "env_consumer_item_map" (catalog and schema are specified in the module `config/loader.py`).'''
     
     sim_id:      str
     consumer_id: str
     item_id:     str
 
 class Pattern(BaseModel):
-    '''Maps to "env_patterns" (catalog and schema are specified in the module `config/loader.py`).'''
+    '''Maps to the table "env_patterns" (catalog and schema are specified in the module `config/loader.py`).'''
     
     pattern_id:                   str
     sim_id:                       str
@@ -181,7 +181,7 @@ class Pattern(BaseModel):
 
 
 class DisruptionSchedule(BaseModel):
-    '''Maps to "env_disruption_schedule" (catalog and schema are specified in the module `config/loader.py`)..'''
+    '''Maps to the table "env_disruption_schedule" (catalog and schema are specified in the module `config/loader.py`)..'''
 
     disruption_id:       str
     sim_id:              str

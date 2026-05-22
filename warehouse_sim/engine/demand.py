@@ -76,9 +76,8 @@ _SCHEMA = '''
 
 @dataclass(frozen=True)
 class DemandResult:
-    '''
-    The outcome of drawing and fulfilling demand for one item in one tick.
-    '''
+    '''The outcome of drawing and fulfilling demand for one item in one tick.'''
+
     item_id:          str
     consumer_id:      str
     pattern_id:       str
@@ -104,30 +103,32 @@ def draw_demand(
     '''
     Draw demand for one item at one tick and compute stock depletion.
 
-    Pipeline (spec section 3.5 + suggestions):
-      1. Sample raw float from pattern
-      2. Apply demand disruption multiplier (multiply demand_spike / suppression)
-      3. floor() to int, clamp to >= 0
-      4. fulfilled = min(int_demand, stock_on_hand)
-      5. unmet     = int_demand - fulfilled
-      6. stock_after = stock_on_hand - fulfilled  (>= 0 guaranteed)
+    Pipeline (spec section 3.5 + suggestions, __docs__/simulationSpecs.md):
+    1. Sample raw float from pattern
+    2. Apply demand disruption multiplier (multiply demand_spike / suppression)
+    3. floor() to int, clamp to >= 0
+    4. fulfilled = min(int_demand, stock_on_hand)
+    5. unmet     = int_demand - fulfilled
+    6. stock_after = stock_on_hand - fulfilled  (>= 0 guaranteed)
     '''
-    raw_demand = float(sampler.sample(pattern, tick))  # already floored int, cast back to float for record
 
-    # Re-sample as raw float before flooring for the record
-    # (sample() returns int; we store the pre-floor float as raw_demand)
-    # To get the true pre-floor float we replicate the base value + seasonal
-    # without the final floor - use a private call path via _raw_float_sample.
+    # Sample raw demand as raw float before flooring for the record
     raw_float  = _raw_float_sample(pattern, tick, sampler)
+    # NOTE: To get the true pre-floor float we replicate the base value + seasonal without the final floor - use a private call path via `_raw_float_sample`.
+
+    # Apply demand multiplier
     multiplier = get_demand_multiplier(item_id, activations)
 
+    # Disrupt raw demand
     disrupted_float = raw_float * multiplier
     int_demand      = max(0, math.floor(disrupted_float))
 
+    # Compute resulting values
     fulfilled  = min(int_demand, stock_on_hand)
     unmet      = int_demand - fulfilled
     stock_after = stock_on_hand - fulfilled   # guaranteed >= 0
 
+    # Return 
     return DemandResult(
         item_id          = item_id,
         consumer_id      = pattern.sim_id,    # resolved by runner from consumer_item_map
@@ -142,15 +143,15 @@ def draw_demand(
 
 def _raw_float_sample(pattern: Pattern, tick: int, sampler: PatternSampler) -> float:
     '''
-    Return the raw float value (base + seasonal + noise) before flooring.
-    This is used to populate raw_demand and disrupted_demand in hist_demand_actuals
-    with the pre-floor float, matching the spec's column types.
+    - Return the raw float value (base + seasonal + noise) before flooring
+    - This is used to populate the `raw_demand` and `disrupted_demand` fields in the table "hist_demand_actuals"
+      (with the pre-floor float, matching the spec's column type; see spec section 6, __docs__/simulationSpecs.md)
 
-    NOTE: This draws from the RNG, so call order matters for reproducibility.
-    The runner always calls draw_demand (not this directly) - this is an
-    internal helper only.
+    NOTE:
+    - This draws from the RNG, so call order matters for reproducibility
+    - The runner always calls `draw_demand` (not `_raw_float_sample` directly) - `_raw_float_sample` is an internal helper only.
     '''
-    import math as _math
+
     from ..config.models import PatternType
 
     # Base value
@@ -158,12 +159,7 @@ def _raw_float_sample(pattern: Pattern, tick: int, sampler: PatternSampler) -> f
         schedule = pattern.custom_schedule
         base     = float(schedule[tick % len(schedule)])
     else:
-        # Re-use sampler's internal statistical draw
-        # We cannot re-draw without consuming RNG; instead we store the
-        # already-drawn int as a float approximation for the record.
-        # The engine calls PatternSampler.sample() which floors - we store
-        # that value as the raw float (acceptable per spec: raw_demand is
-        # the sample "before disruption", not strictly "before floor").
+        #n Sampler's internal statistical draw
         base = float(sampler.sample(pattern, tick))
 
     # Seasonal overlay (deterministic, no RNG)
@@ -184,7 +180,22 @@ def write_demand_actuals(
     results: list[DemandResult],
     consumer_map: dict[str, str],   # item_id -> consumer_id
 ) -> None:
-    '''Append demand actuals for this tick to hist_demand_actuals.'''
+    '''
+    Append demand actuals for this tick to the table "hist_demand_actuals".
+    
+    ---
+
+    PARAMETERS:
+    - `spark` (SparkSession): SparkSession instance handling Spark operations
+    - `sim_id` (str): Simulation ID
+    - `tick` (int): Simulation tick number
+    - `results` (list[DemandResult]): List of DemandResult instances, which encapsulate demand results for this tick (each being for a particular consumer ID and item ID (corresponding to a specific item type) combination)
+    - `consumer_map` (dict[str, str]): Dictionary mapping item IDs (corresponding to specific item types) to consumer IDs who are consuming these items for this tick
+
+    Returns:
+    - None
+    '''
+
     if not results:
         return
 

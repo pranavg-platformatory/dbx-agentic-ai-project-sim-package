@@ -114,7 +114,7 @@ def evaluate_disruptions(
     - `sampler` (PatternSampler): Stateful sampler that wraps a seeded numpy RNG to sample from the specified demand pattern
     
     RETURNS:
-    - (list[DisruptionActivation]): List of all evaluated disruptions for this tick
+    - (list[DisruptionActivation]): List of all evaluated disruptions for this tick (the meaning of "evaluated distruption" is given in the docstring of `evaluate_disruption`)
     '''
 
     in_window = [d for d in disruptions if d.start_tick <= tick <= d.end_tick]

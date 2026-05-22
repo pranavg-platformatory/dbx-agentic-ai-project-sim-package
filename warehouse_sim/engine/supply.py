@@ -49,7 +49,6 @@ from .disruptions import DisruptionActivation, get_lead_time_multiplier, get_tra
 if TYPE_CHECKING:
     from pyspark.sql import SparkSession
 
-
 # ---------------------------------------------------------------------------
 # Catalog / tables
 # ---------------------------------------------------------------------------
@@ -83,7 +82,6 @@ _ARRIVALS_SCHEMA = '''
     actual_lead_time_ticks INT
 '''
 
-
 # ---------------------------------------------------------------------------
 # Result dataclasses
 # ---------------------------------------------------------------------------
@@ -91,6 +89,7 @@ _ARRIVALS_SCHEMA = '''
 @dataclass(frozen=True)
 class ArrivalResult:
     '''The outcome of processing one arriving order.'''
+
     order_id:    str
     item_id:     str
     supplier_id: str
@@ -101,10 +100,10 @@ class ArrivalResult:
     status:      str   # "arrived", "partially_lost", "fully_lost"
     actual_lead_time_ticks: int
 
-
 @dataclass(frozen=True)
 class PlacedOrder:
-    '''A newly placed reorder, returned by place_order().'''
+    '''A newly placed reorder, returned by `place_order()`.'''
+
     order_id:              str
     item_id:               str
     supplier_id:           str
@@ -112,7 +111,6 @@ class PlacedOrder:
     expected_arrival_tick: int
     order_qty:             int
     disruptions_active:    list[str]   # disruption_ids active at placement
-
 
 # ---------------------------------------------------------------------------
 # Core logic (pure Python - no Spark)
@@ -126,14 +124,19 @@ def process_arrivals(
     '''
     Identify orders arriving this tick and apply transit loss.
 
-    Parameters
-    ----------
-    tick            : current simulation tick
-    pending_orders  : list of pending order dicts (status == "pending")
-    activations     : disruption activations for this tick (from sub-step 0)
+    ---
 
-    Returns list of ArrivalResult for orders arriving this tick.
+    PARAMETERS:
+    - `tick` (int): Current simulation tick
+    - `pending_orders` (list[dict]): List of pending order dicts (status == "pending")
+    - `activations` (list[DisruptionActivation]): Disruption activations for this tick (from sub-step 0)
+    
+    NOTE: See module docstring for the reference for the simulation loop steps and sub-steps.
+
+    RETURNS:
+    - (list[ArrivalResult]): List of ArrivalResult instances for orders arriving this tick
     '''
+
     results: list[ArrivalResult] = []
 
     for order in pending_orders:
@@ -172,7 +175,6 @@ def process_arrivals(
 
     return results
 
-
 def place_order(
     tick:                 int,
     item_id:              str,
@@ -186,11 +188,23 @@ def place_order(
     '''
     Compute effective lead time and construct a PlacedOrder.
 
-    Lead time formula (spec section 3.6):
-      actual    = max(1, round(Normal(base_lead_time_ticks, lead_time_variability)))
-      effective = actual × max(1.0, lead_time_multiplier)
+    Lead time formula (spec section 3.6, __docs__/simulationSpecs.md):
+        actual    = `max(1, round(Normal(base_lead_time_ticks, lead_time_variability)))`
+        effective = actual × max(1.0, lead_time_multiplier)
 
-    Returns a PlacedOrder - the runner writes it to ops_pending_orders.
+    ---
+
+    PARAMETERS:
+    - `tick` (int): Simulation tick number
+    - `item_id` (str): Item ID (which corresponds to a specific item type)
+    - `supplier_id` (str): Supplier ID (from whom items are to be ordered)
+    - `base_lead_time_ticks` (int): Base lead time ticks (as configured for the supplier ID in the table "env_suppliers")
+    - `lead_time_variability` (float): Variability in the lead time (as configured for the supplier ID in the table "env_suppliers")
+    - `activations` (list[DisruptionActivation]): Disruption activations for this tick (from sub-step 0)
+    - `sampler` (PatternSampler): Stateful sampler that wraps a seeded numpy RNG to sample from the specified demand pattern
+
+    RETURNS:
+    - (PlacedOrder): PlacedOrder instance; the runner (warehouse_sim/engine/runner.py) writes it to the table "ops_pending_orders"
     '''
     actual_lt    = sampler.sample_lead_time(base_lead_time_ticks, lead_time_variability)
     lt_mult      = get_lead_time_multiplier(item_id, activations)
@@ -211,7 +225,6 @@ def place_order(
         disruptions_active    = active_disruption_ids,
     )
 
-
 # ---------------------------------------------------------------------------
 # Spark writes (lazy imports)
 # ---------------------------------------------------------------------------
@@ -221,7 +234,20 @@ def write_placed_order(
     sim_id: str,
     order:  PlacedOrder,
 ) -> None:
-    '''Insert a new pending order into ops_pending_orders.'''
+    '''
+    Insert a new pending order into the table "ops_pending_orders".
+    
+    ---
+
+    PARAMETERS:
+    - `spark` (SparkSession): SparkSession instance handling Spark operations
+    - `sim_id` (str): Simulation ID
+    - `order` (PlacedOrder): PlacedOrder instance encapsulating the details of the order placed in this time tick
+    
+    RETURNS:
+    - None
+    '''
+
     rows = [{
         "order_id":                   order.order_id,
         "sim_id":                     sim_id,
@@ -236,13 +262,25 @@ def write_placed_order(
     spark.createDataFrame(rows, schema=_PENDING_SCHEMA.strip()) \
         .write.mode("append").saveAsTable(_PENDING_TABLE)
 
-
 def update_order_status(
     spark:   "SparkSession",
     sim_id:  str,
     results: list[ArrivalResult],
 ) -> None:
-    '''Update ops_pending_orders status for arrived orders.'''
+    '''
+    Update the table "ops_pending_orders" status for arrived orders.
+    
+    ---
+
+    PARAMETERS:
+    - `spark` (SparkSession): SparkSession instance handling Spark operations
+    - `sim_id` (str): Simulation ID
+    - `results` (list[ArrivalResult]): List of ArrivalResult instances for orders arriving this tick
+    
+    RETURNS:
+    - None
+    '''
+    
     for r in results:
         spark.sql(f'''
             UPDATE {_PENDING_TABLE}
@@ -251,14 +289,27 @@ def update_order_status(
               AND order_id = '{r.order_id}'
         ''')
 
-
 def write_arrivals(
     spark:   "SparkSession",
     sim_id:  str,
     tick:    int,
     results: list[ArrivalResult],
 ) -> None:
-    '''Append arrival records to hist_supply_arrivals.'''
+    '''
+    Append arrival records to the table "hist_supply_arrivals".
+    
+    ---
+
+    PARAMETERS:
+    - `spark` (SparkSession): SparkSession instance handling Spark operations
+    - `sim_id` (str): Simulation ID
+    - `tick` (int): Simulation tick number
+    - `results` (list[ArrivalResult]): List of ArrivalResult instances for orders arriving this tick
+    
+    RETURNS:
+    - None
+    '''
+    
     if not results:
         return
 
@@ -284,7 +335,19 @@ def fetch_pending_orders(
     spark:  "SparkSession",
     sim_id: str,
 ) -> list[dict]:
-    '''Read all pending (undelivered) orders for this sim from ops_pending_orders.'''
+    '''
+    Read all pending (undelivered) orders for this simulation from the table "ops_pending_orders".
+    
+    ----
+
+    PARAMETERS:
+    - `spark` (SparkSession): SparkSession instance handling Spark operations
+    - `sim_id` (str): Simulation ID
+    
+    RETURNS:
+    - (list[dict]): List of dictionaries, each dictionary encapsulating a row from the table "ops_pending_orders"
+    '''
+    
     return [
         row.asDict()
         for row in spark.sql(f'''

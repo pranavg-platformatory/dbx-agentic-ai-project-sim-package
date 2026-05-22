@@ -133,13 +133,14 @@ class SimRunner:
     '''
     Orchestrates the simulation tick loop.
 
-    Parameters
-    ----------
-    spark   : active SparkSession
-    world   : fully loaded SimWorld (from load_world)
-    agent   : any BaseAgent subclass - injected, never imported directly
-    logger  : EventLogger instance for this sim run
-    sampler : PatternSampler seeded with world.config.random_seed
+    ---
+
+    PARAMETERS:
+    - `spark` (SparkSession): Active SparkSession
+    - `world` (SimWorld): Fully loaded SimWorld (from `load_world`)
+    - `agent` (BaseAgent): Any BaseAgent subclass - injected, never imported directly
+    - `logger` (EventLogger): EventLogger instance for this sim run
+    - `sampler` (PatternSampler): PatternSampler seeded with world.config.random_see
     '''
 
     def __init__(
@@ -177,9 +178,11 @@ class SimRunner:
 
     def run(self) -> None:
         '''
-        Execute the simulation. Runs for config.num_ticks ticks when
-        run_mode is 'finite', or forever when 'infinite' or 'cyclic'.
+        Execute the simulation.
+        
+        NOTE: The simulation runs for `config.num_ticks` ticks when run_mode is 'finite', or forever when 'infinite' or 'cyclic'.
         '''
+        
         self._initialise()
 
         tick = 0
@@ -194,7 +197,8 @@ class SimRunner:
     # ------------------------------------------------------------------
 
     def _initialise(self) -> None:
-        '''Set up in-memory state and fire SIM_STARTED.'''
+        '''Set up in-memory state and fire the event `SIM_STARTED`.'''
+
         self._stock_states = initialise_states(self._world)
         self._cost_states  = {
             item_id: CostState(item_id=item_id)
@@ -515,10 +519,19 @@ class SimRunner:
 
     def _update_expected_arrivals(self, tick: int) -> None:
         '''
-        Compute expected_arrivals_next_tick for each item by querying
-        the in-flight pending orders that are due at tick+1.
-        We query ops_pending_orders rather than keeping a separate structure.
+        Compute expected_arrivals_next_tick for each item by querying the in-flight pending orders that are due at tick+1.
+        
+        NOTE: We query the table "ops_pending_orders" rather than keeping a separate structure.
+        
+        ---
+
+        PARAMETERS:
+        - `tick` (int): Simulation tick number
+
+        RETURNS:
+        - None
         '''
+        
         pending = fetch_pending_orders(self._spark, self._sim_id)
         next_tick = tick + 1
         for item_id, state in self._stock_states.items():
@@ -533,7 +546,20 @@ class SimRunner:
         tick:        int,
         activations: list[DisruptionActivation],
     ) -> AgentContext:
-        '''Assemble the AgentContext the agent will receive.'''
+        '''
+        Assemble the AgentContext the agent will receive.
+        
+        ---
+
+        PARAMETERS:
+        - `tick` (int): Simulation tick number
+        - `activations` (list[DisruptionActivation]): Disruption activations for this tick (from sub-step 0)
+
+        RETURNS:
+        - (AgentContext): The complete read-only snapshot delivered to the agent at sub-step 4 of each tick, after arrivals (3a) and demand depletion (3b)
+
+        NOTE: See module docstring for the reference for the simulation loop steps and sub-steps.
+        '''
 
         # -- Item states
         item_states = {
@@ -611,9 +637,18 @@ class SimRunner:
         window: Optional[int],
     ) -> dict[str, list[DemandRecord]]:
         '''
-        Read demand history from hist_demand_actuals.
-        Returns last `window` ticks per item (all if window is None).
+        Read demand history from the table "hist_demand_actuals"; return last `window` ticks per item (all if window is None).
+        
+        ---
+
+        PARAMETERS:
+        - `tick` (int): Simulation tick number
+        - `window` (int, optional): Number of consecutive ticks (before `tick`) to consider
+        
+        RETURNS:
+        - (dict[str, list[DemandRecord]]): Dictionary linking item IDs (which correspond to specific item types) to corresponding DemandRecord instances
         '''
+
         if window is not None:
             min_tick = tick - window
             where    = f"AND tick > {min_tick}"
@@ -646,7 +681,19 @@ class SimRunner:
         tick:        int,
         activations: list[DisruptionActivation],
     ) -> None:
-        '''Fire DISRUPTION_ACTIVATED for newly triggered disruptions.'''
+        '''
+        Fire the event `DISRUPTION_ACTIVATED` for newly triggered disruptions.
+        
+        ---
+
+        PARAMETERS:
+        - `tick` (int): Simulation tick number
+        - `activations` (list[DisruptionActivation]): Disruption activations for this tick (from sub-step 0)
+
+        RETURNS:
+        - None
+        '''
+
         for a in activations:
             if a.is_active_this_tick:
                 self._logger.disruption_activated(
@@ -725,9 +772,22 @@ class SimRunner:
         context:   AgentContext,
     ) -> None:
         '''
-        Ensure the agent returned exactly one decision per item and that
-        order quantities are within bounds.
+        Ensure the following:
+        - The agent returned exactly one decision per item
+        - Order quantities are within bounds
+
+        ---
+
+        PARAMETERS:
+        - `decisions` (list[ReorderDecision]): List of agent decisions for this tick (each ReorderDecision instance encapsulates the agent's decision for one item type in one tick)
+        - `context` (AgentContext): The complete read-only snapshot delivered to the agent at sub-step 4 of each tick, after arrivals (3a) and demand depletion (3b)
+
+        NOTE: See module docstring for the reference for the simulation loop steps and sub-steps.
+
+        RETURNS:
+        - None
         '''
+        
         decided_items = {d.item_id for d in decisions}
         expected      = set(context.items())
 

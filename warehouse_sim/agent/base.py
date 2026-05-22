@@ -65,7 +65,7 @@ class PendingOrder:
 
 @dataclass(frozen=True)
 class DemandRecord:
-    '''One row from "hist_demand_actuals", surfaced as demand history.'''
+    '''One row from the table "hist_demand_actuals", surfaced as demand history.'''
 
     tick:             int
     item_id:          str

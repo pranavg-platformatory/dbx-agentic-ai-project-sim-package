@@ -236,6 +236,8 @@ class SimRunner:
     def _run_tick(self, tick: int) -> None:
         self._logger.tick_started(tick)
 
+        # NOTE: The numberings here refer simulation loop steps and sub-steps, as detailed in this module's docstring.
+
         # ----------------------------------------------------------------
         # [0] Evaluate disruptions
         # ----------------------------------------------------------------

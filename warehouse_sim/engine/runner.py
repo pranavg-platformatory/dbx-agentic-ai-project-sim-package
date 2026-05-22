@@ -195,7 +195,7 @@ class SimRunner:
 
     def _initialise(self) -> None:
         '''Set up in-memory state and fire SIM_STARTED.'''
-        self._stock_states = initialise_states(self._spark, self._sim_id, self._world)
+        self._stock_states = initialise_states(self._world)
         self._cost_states  = {
             item_id: CostState(item_id=item_id)
             for item_id in self._world.items

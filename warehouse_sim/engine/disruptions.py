@@ -70,9 +70,10 @@ _SCHEMA = '''
 @dataclass(frozen=True)
 class DisruptionActivation:
     '''
-    The resolved activation state of one disruption for one tick.
-    Returned by evaluate_disruptions; consumed by runner and other sub-modules.
+    - The resolved activation state of one disruption for one tick
+    - Returned by `evaluate_disruptions`; consumed by warehouse_sim/engine/runner.py and other sub-modules
     '''
+
     disruption_id:       str
     item_id:             str
     disruption_type:     DisruptionType
@@ -92,15 +93,30 @@ def evaluate_disruptions(
     '''
     Evaluate all disruptions for the given tick.
 
-    Rules (spec section 3.8 + FR-07):
-      - Only disruptions whose window includes this tick are considered
-      - Stochastic disruptions are evaluated in disruption_id alphabetical order
-      - Each stochastic disruption draws one uniform value from the shared RNG
-      - draw < trigger_probability -> active; else -> inactive (magnitude 0.0)
-      - Deterministic disruptions are always active within their window
+    NOTE: "Evaluated disruption" means a disruption where the following are computed for the given tick:
+    - `effective_magnitude` (float) (0.0 if stochastic and did not trigger)
+    - `is_active_this_tick` (bool)
+
+    Rules (spec section 3.8 + FR-07, __docs__/simulationSpecs.md):
+    - Only disruptions whose window includes this tick are considered
+    - Stochastic disruptions are evaluated in `disruption_id` alphabetical order
+    - Each stochastic disruption draws one uniform value from the shared RNG
+    - `draw` < `trigger_probability` -> active; else -> inactive (magnitude 0.0)
+    - Deterministic disruptions are always active within their window
 
     Returns one DisruptionActivation per in-window disruption.
+
+    ---
+
+    PARAMETERS:
+    - `tick` (int): Simulation tick number
+    - `disruptions` (list[DisruptionSchedule]): List of pre-defined disruption events for the simulation run
+    - `sampler` (PatternSampler): Stateful sampler that wraps a seeded numpy RNG to sample from the specified demand pattern
+    
+    RETURNS:
+    - (list[DisruptionActivation]): List of all evaluated disruptions for this tick
     '''
+
     in_window = [d for d in disruptions if d.start_tick <= tick <= d.end_tick]
     in_window.sort(key=lambda d: d.disruption_id)  # alphabetical for FR-07
 
@@ -129,10 +145,20 @@ def get_demand_multiplier(
     activations: list[DisruptionActivation],
 ) -> float:
     '''
-    Net demand multiplier for an item this tick.
-    demand_spike and demand_suppression magnitudes are multiplied together.
-    Returns 1.0 if no demand disruptions are active.
+    Net demand multiplier for an item this tick; return 1.0 if no demand disruptions are active.
+    
+    NOTE: `demand_spike` and `demand_suppression` magnitudes are multiplied together.
+    
+    ---
+
+    PARAMETERS:
+    - `item_id` (str): Item ID (which corresponds to a specific item type)
+    - `activations` (list[DisruptionActivation]): List of all evaluated disruptions for this tick (the meaning of "evaluated distruption" is given in the docstring of `evaluate_disruption`)
+    
+    RETURNS:
+    - (float): Demand multiplier
     '''
+
     multiplier = 1.0
     for a in activations:
         if a.item_id != item_id or not a.is_active_this_tick:
@@ -147,10 +173,21 @@ def get_lead_time_multiplier(
     activations: list[DisruptionActivation],
 ) -> float:
     '''
-    Net lead time multiplier for an item this tick.
-    transit_delay magnitudes are multiplied together.
-    Clamped to minimum of 1.0 (spec section 3.6).
+    Net lead time multiplier for an item this tick, clamped to minimum of 1.0 (spec section 3.6, __docs__/simulationSpecs.md).
+
+    NOTE: `transit_delay` magnitudes are multiplied together.
+
+    ---
+
+    PARAMETERS:
+    - `item_id` (str): Item ID (which corresponds to a specific item type)
+    - `activations` (list[DisruptionActivation]): List of all evaluated disruptions for this tick (the meaning of "evaluated distruption" is given in the docstring of `evaluate_disruption`)
+    
+    RETURNS:
+    - (float): Lead time multiplier
+
     '''
+
     multiplier = 1.0
     for a in activations:
         if a.item_id != item_id or not a.is_active_this_tick:
@@ -165,10 +202,20 @@ def get_transit_loss_fraction(
     activations: list[DisruptionActivation],
 ) -> float:
     '''
-    Net transit loss fraction for an item this tick.
-    transit_loss magnitudes are multiplied together, clamped to [0.0, 1.0].
-    Returns 0.0 if no transit loss disruptions are active.
+    Net transit loss fraction for an item this tick; return 0.0 if no transit loss disruptions are active.
+
+    NOTE: `transit_loss` magnitudes are multiplied together, clamped to [0.0, 1.0].
+
+    ---
+
+        PARAMETERS:
+    - `item_id` (str): Item ID (which corresponds to a specific item type)
+    - `activations` (list[DisruptionActivation]): List of all evaluated disruptions for this tick (the meaning of "evaluated distruption" is given in the docstring of `evaluate_disruption`)
+    
+    RETURNS:
+    - (float): Transit loss fraction
     '''
+
     fraction = 1.0
     has_loss = False
     for a in activations:
@@ -190,7 +237,21 @@ def write_activations(
     tick:        int,
     activations: list[DisruptionActivation],
 ) -> None:
-    '''Append disruption activation records for this tick to ops_active_disruptions.'''
+    '''
+    Append disruption activation records for this tick to the table "ops_active_disruptions".
+    
+    ---
+
+    PARAMETERS:
+    - `spark` (SparkSession): SparkSession instance handling Spark operations
+    - `sim_id` (str): Simulation ID
+    - `tick` (int): Simulation tick number
+    - `activations` (list[DisruptionActivation]): List of all evaluated disruptions for this tick (the meaning of "evaluated distruption" is given in the docstring of `evaluate_disruption`)
+
+    Returns:
+    - None
+    '''
+    
     if not activations:
         return
 

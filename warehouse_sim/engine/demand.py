@@ -110,6 +110,18 @@ def draw_demand(
     4. fulfilled = min(int_demand, stock_on_hand)
     5. unmet     = int_demand - fulfilled
     6. stock_after = stock_on_hand - fulfilled  (>= 0 guaranteed)
+
+    ---
+    PARAMETERS:
+    - `tick` (int): Simulation tick number
+    - `item_id` (str): Item ID (which corresponds to a specific item type)
+    - `pattern` (Pattern): Pattern instance encapsulating the specifications for a demand pattern
+    - `stock_on_hand` (int): Stock in hand for the specified item ID (which corresponds to a specific item type)
+    - `activations` (list[DisruptionActivation]): List of demand disruptions active in this tick
+    - `sampler` (PatternSampler): Stateful sampler that wraps a seeded numpy RNG to sample from the specified demand pattern
+    
+    RETURNS:
+    - (DemandResult): DemandResult result encapsulating the state of key system parameters resulting from the demand in this tick
     '''
 
     # Sample raw demand as raw float before flooring for the record
@@ -150,6 +162,16 @@ def _raw_float_sample(pattern: Pattern, tick: int, sampler: PatternSampler) -> f
     NOTE:
     - This draws from the RNG, so call order matters for reproducibility
     - The runner always calls `draw_demand` (not `_raw_float_sample` directly) - `_raw_float_sample` is an internal helper only.
+    
+    ---
+
+    PARAMETERS:
+    - `pattern` (Pattern): Pattern instance encapsulating the specifications for a demand pattern
+    - `tick` (int): Simulation tick number
+    - `sampler` (PatternSampler): Stateful sampler that wraps a seeded numpy RNG to sample from the specified demand pattern
+    
+    RETURNS:
+    - (float): Pattern-derived/pattern-sampled float value (which serves as the raw demand)
     '''
 
     from ..config.models import PatternType

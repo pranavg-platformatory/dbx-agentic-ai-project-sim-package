@@ -167,7 +167,7 @@ class AgentContext:
         ---
 
         PARAMETERS:
-        - `item_id` (str): Item ID
+        - `item_id` (str): Item ID (which corresponds to a specific item type)
 
         RETURNS:
         - (list[PendingOrder]): List of pending orders for the item ID (each pending order encapsulated as a `PendingOrder` instance) 
@@ -181,7 +181,7 @@ class AgentContext:
         ---
 
         PARAMETERS:
-        - `item_id` (str): Item ID
+        - `item_id` (str): Item ID (which corresponds to a specific item type)
 
         RETURNS:
         - (list[DemandRecord]): List of demand records for the item ID (each demand record encapsulated as a `DemandRecord` instance) 
@@ -196,7 +196,7 @@ class AgentContext:
         ---
 
         PARAMETERS:
-        - `item_id` (str): Item ID
+        - `item_id` (str): Item ID (which corresponds to a specific item type)
 
         RETURNS:
         - (list[ActiveDisruption]): List of active disruptions for the item ID (each active disruption encapsulated as a `ActiveDisruption` instance) 

@@ -17,12 +17,12 @@
 
 | **Resource** | `Link` |
 | --- | --- |
-| **Warehouse simulation package** | [`warehouse_sim`](./warehouse_sim/) |
-| **Toy simulation package** | [`toy_sim`](./toy_sim/) |
-| **Data store definition** | [`_dataStoreDefinition`](./_dataStoreDefinition/) |
-| **Test notebooks** | [`_testNotebooks`](./_testNotebooks/) |
-| **Devlog** | [`devlog.md`](./devlog.md) |
-| **Dedicated documentation directory** | [`__docs__`](./__docs__/) |
+| Warehouse simulation package | [`warehouse_sim`](./warehouse_sim/) |
+| Toy simulation package | [`toy_sim`](./toy_sim/) |
+| Devlog | [`devlog.md`](./devlog.md) |
+| Data store definition | [`_dataStoreDefinition`](./_dataStoreDefinition/) |
+| Test notebooks | [`_testNotebooks`](./_testNotebooks/) |
+| Dedicated documentation directory | [`__docs__`](./__docs__/) |
 
 <h1>Implementation Notes</h1>
 

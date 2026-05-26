@@ -712,9 +712,6 @@
 
 # COMMAND ----------
 
-
-# COMMAND ----------
-
 # MAGIC %md
 # MAGIC ## `hist_eval_metrics`
 # MAGIC
@@ -756,6 +753,8 @@
 # MAGIC  'simulation.layer' = 'historical'
 # MAGIC )
 # MAGIC PARTITIONED BY (sim_id);
+
+# COMMAND ----------
 
 # MAGIC %md
 # MAGIC # Event Log (`tables4eventlog`)

@@ -1,4 +1,4 @@
-<h1>Dedication Documentation for Warehouse Simulation</h1>
+<h1>Dedicated Documentation for Warehouse Simulation</h1>
 
 ---
 

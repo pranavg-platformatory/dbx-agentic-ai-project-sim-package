@@ -57,6 +57,8 @@ Append-only summaries that accumulate across ticks. Used for agent context and o
 | `hist_supply_arrivals` | One row per arriving order recording ordered vs. actually received quantities and the actual lead time experienced. Makes transit loss and lead time variance fully observable after the fact. |
 | `hist_reorder_decisions` | One row per item per tick for every agent decision - including hold decisions. Captures the full agent context at decision time (stock on hand, in-transit units, reasoning text, agent version), enabling audit and cross-version comparison. |
 | `hist_cost_by_tick` | One row per item per tick recording the individual cost components incurred that tick (holding, stockout, order, transit loss). Non-cumulative counterpart to `ops_cost_accumulator`; use for per-tick trend analysis and cost spike debugging. |
+| `hist_eval_metrics` | One row per item per tick recording a calculated metric (must be custom-defined). Written by the LLMAgentWrapper monitoring loop on every tick. |
+
 
 ---
 

@@ -1,6 +1,6 @@
 <h1>Reasoning Integration Specifications - 5</h1>
 
-***LAWO Build Considerations***
+***LLMAgentWrapper Build Considerations***
 
 > **Context files reviewed**:
 > 

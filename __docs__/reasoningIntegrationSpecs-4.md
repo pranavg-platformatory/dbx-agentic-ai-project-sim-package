@@ -1,16 +1,16 @@
 <h1>Reasoning Integration Specifications - 4</h1>
 
-***LLM Agent Wrapper Object (LAWO) - Design & Feedback***
+***LLM Agent Wrapper - Design & Feedback***
 
 > **Context**: [`reasoningIntegrationSpecs-3.md`](./reasoningIntegrationSpecs-3.md)
 >
-> This document captures the LAWO design and the corresponding feedback, including how open concerns from [`reasoningIntegrationSpecs-2.md`](./reasoningIntegrationSpecs-2.md) are addressed or not addressed, and which concerns fall under Pranav's vs. Her Majesty Reshma the Boss's scope.
+> This document captures the LLMAgentWrapper design and the corresponding feedback, including how open concerns from [`reasoningIntegrationSpecs-2.md`](./reasoningIntegrationSpecs-2.md) are addressed or not addressed, and which concerns fall under Pranav's vs. Her Majesty Reshma the Boss's scope.
 
 ---
 
 **Contents**:
 
-- [LAWO Design](#lawo-design)
+- [LLMAgentWrapper Design](#llmagentwrapper-design)
   - [Core Structure](#core-structure)
   - [Async/Sync Split](#asyncsync-split)
 - [Feedback](#feedback)
@@ -20,14 +20,14 @@
 
 ---
 
-# LAWO Design
+# LLMAgentWrapper Design
 
 ## Core Structure
 
 ```
-LAWO: monitoring/tick  --> AgentContext encapsulation --> insert to queue
+LLMAgentWrapper: monitoring/tick  --> AgentContext encapsulation --> insert to queue
 
-LAWO: executor logic: check trigger condition
+LLMAgentWrapper: executor logic: check trigger condition
                  ^
                  |
 --> No => wait --+

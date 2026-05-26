@@ -8,8 +8,8 @@ Internal dataclasses shared between the following:
 ---
 
 NOTE:
-- These dataclasses are kept in a separate module so that both sides can import from one place without either importing from the other, avoiding circular dependencies.
-- These types are LLMAgentWrapper internals - they are not part of the BaseAgent contract and should not be imported outside of the agent/llm_agent_wrapper* files.
+- These dataclasses are kept in a separate module so that both sides can import from one place without either importing from the other, avoiding circular dependencies
+- These types are LLMAgentWrapper internals - they are not part of the BaseAgent contract and should not be imported outside of the warehouse_sim/agent/llm_agent_wrapper* files
 '''
 
 from __future__ import annotations

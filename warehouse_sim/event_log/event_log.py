@@ -461,6 +461,59 @@ class EventLogger:
             "remaining_budget": remaining_budget,
         })
 
+    # ------------------------------------------------------------------
+    # Executor - all stale contexts
+    # ------------------------------------------------------------------
+
+    # NOTE: Detailed docstrings are not given for the following as they are simply wrappers for `_emit`, each function wrapping the `_emit` function call needed to add data for the event types referenced/indicated by the function names.
+    
+    def executor_all_stale(
+        self,
+        tick:        int,
+        queue_size:  int,
+        oldest_tick: int,
+        newest_tick: int,
+    ) -> None:
+        self._emit(
+            tick       = tick,
+            event_type = "EXECUTOR_ALL_STALE",
+            payload    = {
+                "queue_size":   queue_size,
+                "oldest_tick":  oldest_tick,
+                "newest_tick":  newest_tick,
+                "current_tick": tick
+            },
+        )
+
+    # ------------------------------------------------------------------
+    # LLM fallbacks
+    # ------------------------------------------------------------------
+
+    def fallback_structural(
+        self,
+        tick:         int,
+        raw_response: str,
+        error:        str
+    ) -> None:
+        self._emit(
+        event_type = "FALLBACK_STRUCTURAL",
+        tick       = tick,
+        payload    = {
+            "raw_response": str(raw_response),
+            "error":        error,
+        },
+    )
+
+    def fallback_logical(
+        self,
+        tick:       int,
+        violations: list,
+    ) -> None:
+        self._emit(
+            event_type = "FALLBACK_LOGICAL",
+            tick       = tick,
+            payload    = {"violations": violations},
+        )
 
 # ---------------------------------------------------------------------------
 # Standalone row builder (no Spark - used by tests and engine internals)

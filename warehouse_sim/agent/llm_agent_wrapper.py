@@ -1,58 +1,57 @@
 '''
 warehouse_sim/agent/llm_agent_wrapper.py
 
-LLM Agent Wrapper Object (LLMAgentWrapper) - Stage 5: monitoring loop only.
+LLM Agent Wrapper Object (LLMAgentWrapper) - Stage 6: executor thread and shared result slot.
 
-This file implements the sync, tick-bound half of LLMAgentWrapper.decide():
-- Assemble QueueMessage from the current AgentContext
+NOTE: For documentation on stages, see __docs__/reasoningIntegrationDevelopmentApproach-3.md.
+
+Extends Stage 5 (monitoring loop) with the async executor half:
+- Shared result slot (_result_slot, _executor_busy, _last_committed)
+- Trigger condition check and executor thread dispatch (queue snapshot on dispatch)
+- Executor thread: drain logic, StubLLMAgent call, pre-flight validation,
+  fallback routing, ExecutorResult write to slot
+- Slot consumption on the sync side at the top of each decide() call
+- StubLLMAgent with three modes (valid, structural_fail, logical_fail)
+
+Stage 5 summary (monitoring loop - unchanged):
+- Assemble QueueMessage from the current AgentContext each tick
 - Push to the in-process queue (collections.deque, capped at queue_size)
 - Write evaluation metrics to hist_eval_metrics
 - Return _last_committed (hold-all until the executor produces a result)
-
-The executor half (background thread, shared result slot, StubLLMAgent,
-pre-flight validation, fallback routing) is added in Stage 6. A clearly
-marked # STAGE 6 block in decide() shows exactly where it will be inserted.
-The class is fully runnable at this stage - wirable into the runner and
-returning valid decisions every tick - so the monitoring loop can be tested
-in isolation before the async complexity is introduced.
 
 ---
 
 DEPENDENCY FLAGS:
 
-[DEP-1] EventLogger.agent_error()
-    Called in runner.py's resilience wrap (Stage 3) when the agent raises an
-    unhandled exception. This method does not yet exist on EventLogger - it
-    must be added before the Stage 3 change can be tested end-to-end. The
-    addition follows the same pattern as every other event method on the
-    logger (same payload structure as FALLBACK_STRUCTURAL / FALLBACK_LOGICAL
-    defined in Stage 6).
+[DEP-1] EventLogger.agent_error():
+- Called in runner.py's resilience wrap (Stage 3) when the agent raises an unhandled exception
+- This method does not yet exist on EventLogger - it must be added before the Stage 3 change can be tested end-to-end
+- The addition follows the same pattern as every other event method on the logger (same payload structure as FALLBACK_STRUCTURAL / FALLBACK_LOGICAL defined in Stage 6)
 
-[DEP-2] SimWorld.suppliers (min_lead_time resolution)
-    __init__ resolves context_obsolescence_threshold_k=None to the minimum
-    base_lead_time_ticks across all suppliers in the world. This reads
-    world.suppliers, which is a dict[str, Supplier] based on the runner's
-    usage pattern. If the SimWorld structure differs, the resolution logic
-    in __init__ must be updated accordingly.
+[DEP-2] SimWorld.suppliers (min_lead_time resolution):
+- __init__ resolves context_obsolescence_threshold_k=None to the minimum base_lead_time_ticks across all suppliers in the world
+- This reads world.suppliers, which is a dict[str, Supplier] based on the runner's usage pattern
+- If the SimWorld structure differs, the resolution logic in __init__ must be updated accordingly
 
-[DEP-3] hist_eval_metrics table (Stage 4)
-    _write_eval_metrics writes to hackathon_of_the_century.tables4hist.hist_eval_metrics.
-    This table must exist before the LLMAgentWrapper is run. It is created in Stage 4
-    (setup4dataStore.py). Running the LLMAgentWrapper before Stage 4 is complete will
-    raise a table-not-found error on the first tick.
+[DEP-3] "hist_eval_metrics" table (Stage 4):
+- _write_eval_metrics writes to hackathon_of_the_century.tables4hist.hist_eval_metrics
+- This table must exist before the LLMAgentWrapper is run
+- It is created in Stage 4 (_dataStoreDefinition/setup4dataStore.py)
+- Running the LLMAgentWrapper before Stage 4 is complete will raise a table-not-found error on the first tick
 
-[DEP-4] SparkSession
-    _write_eval_metrics needs a SparkSession to write to Delta. The runner
-    holds self._spark but does not pass it to agent.decide(). Two options:
-      (a) Inject SparkSession into LLMAgentWrapper.__init__ (chosen here)
-      (b) Write metrics via a side-channel outside decide()
-    Option (a) is consistent with the runner's own pattern (spark injected at
-    construction) and keeps decide() side-effect-free with respect to its
-    caller. The SparkSession is stored as self._spark.
+[DEP-4] SparkSession:
+- _write_eval_metrics needs a SparkSession to write to Delta
+- The runner holds self._spark but does not pass it to agent.decide()
+- 2 options:
+    (a) Inject SparkSession into LLMAgentWrapper.__init__ (chosen here)
+    (b) Write metrics via a side-channel outside decide()
+- Option (a) is consistent with the runner's own pattern (spark injected at construction) and keeps decide() side-effect-free with respect to its caller
+- The SparkSession is stored as self._spark
 '''
 
 from __future__ import annotations
 
+import threading
 from collections import deque
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Optional
@@ -182,6 +181,25 @@ class LLMAgentWrapper(BaseAgent):
         self._executor_busy: bool                     = False  # True from dispatch until slot write
 
         # ------------------------------------------------------------------
+        # Thread-safety lock for shared result slot
+        #
+        # CONCEPTUAL SIDE NOTE:
+        # - GIL = Global Interpretor Lock, a mutex ensuring only one thread executes Python bytecode at a time.
+        # - PyPy with Software Transactional Memory (STM) is an experimental version of the PyPy interpreter designed to run multi-threaded Python programs on multiple CPU cores simultaneously by removing the Global Interpreter Lock (GIL)
+        #
+        # Why use thread-safety lock:
+        # - _result_slot and _executor_busy are written by the executor thread and read by the sync side of decide()
+        # - In CPython, simple attribute assignment is GIL-protected for basic types, making bare reads/writes technically safe in practice
+        # - However, relying on GIL behaviour is an implementation detail, not a language guarantee
+        #   ... Code that runs correctly only because of the GIL is fragile and non-portable!
+        #
+        # Hence:
+        # - A threading.Lock makes the intent explicit and ensures correctness outside CPython (e.g. Jython, PyPy with STM)
+        # - The lock is held only for the read-then-clear or write operations on the slot - never across the LLM call - so contention is negligible
+        # ------------------------------------------------------------------
+        self._slot_lock: threading.Lock = threading.Lock()
+
+        # ------------------------------------------------------------------
         self._fallback_agent = RuleBasedAgent()
         '''
         Fallback agent
@@ -203,14 +221,30 @@ class LLMAgentWrapper(BaseAgent):
         Called by the runner on every tick. Never blocks.
 
         Stage 5 behaviour:
-          [1] Run the monitoring loop (assemble QueueMessage, push to queue,
-              write eval metrics).
-          [2] # STAGE 6 block: executor dispatch and result slot consumption.
-          [3] Return _last_committed.
+          [1] Run the monitoring loop (assemble QueueMessage, push to queue, write eval metrics)
+          [2] `# STAGE 6` block: executor dispatch and result slot consumption
+          [3] Return _last_committed
 
-        The runner receives a valid list[ReorderDecision] on every tick.
-        Until the executor produces a result (Stage 6), this is always the
-        hold-all initialised in __init__.
+        NOTE 1: For documentation on stages, see __docs__/reasoningIntegrationDevelopmentApproach-3.md.
+
+        NOTE 2:
+        - The runner receives a valid list[ReorderDecision] on every tick
+        - Until the executor produces a result (Stage 6), this is always the hold-all initialised in __init__
+
+        NOTE 3: sync side vs. async side:
+        - `.decide()` has 2 components:
+            - sync side (monitoring + executor condition checking), the code that runs synchronously with the simulation ticks
+            - async side (executor), the code that runs as a separate thread
+        - The sync side regularly checks for the completion of the async side and provides results in-sync with simulation ticks once it receives the async side's result
+        
+        ---
+
+        PARAMETERS:
+        - `context` (AgentContext): AgentContext instance encapsulating the context necessary for reasoning
+        
+        RETURNS:
+        - (list[ReorderDecision]): 1 decision per item in `context.items()` \n
+          NOTE: The engine will raise an exception if an item is missing from the returned list
         '''
 
         # ------------------------------------------------------------------
@@ -222,17 +256,57 @@ class LLMAgentWrapper(BaseAgent):
 
         # ------------------------------------------------------------------
         # [2] Executor loop
-        # 
-        # [STAGE 6] (See __docs__/reasoningIntegrationDevelopmentApproach-3.md) Executor dispatch and result slot consumption
-        #
-        # This block will contain:
-        #   (a) Consume _result_slot if populated: update _last_committed, clear slot, mark executor idle
-        #   (b) Check trigger condition (tick % N == 0) and executor idle: snapshot queue, dispatch executor thread, mark executor busy
-        #
-        # NOTE: At Stage 5 (see __docs__/reasoningIntegrationDevelopmentApproach-3.md) this block is intentionally empty - the monitoring loop above is proven in isolation before async complexity is introduced.
         # ------------------------------------------------------------------
 
-        # TODO
+        # (a) Consume result slot
+        #
+        # - Slot consumption happens BEFORE the trigger check
+        # - If a result arrived while the executor was running, it must be picked up and committed before deciding whether to dispatch the executor again
+        # - Otherwise the executor could be dispatched a second time based on a stale _last_committed value
+        #
+        # NOTE: The lock is acquired only for the read-then-clear operation, not across the LLM call; this keeps contention negligible
+        with self._slot_lock:
+            pending = self._result_slot
+            if pending is not None:
+                self._result_slot   = None
+                self._executor_busy = False
+
+        if pending is not None:
+            # Commit outside the lock - _last_committed is only ever written by the sync side of decide(), so no race here.
+            self._last_committed = pending.decisions
+
+        # (b) Trigger check and executor dispatch
+        #
+        # Conditions for dispatch:
+        # - Trigger condition met (tick % N == 0)
+        # - Executor is not already busy
+        # 
+        # NOTE:
+        # - If the executor is still running when the trigger fires, the tick is skipped silently
+        # - The monitoring loop has continued queuing messages, so the executor will have a fresh context to drain to on the next dispatch
+        trigger_met = (context.tick % self._config.executor_trigger_every_n_ticks == 0)
+
+        if trigger_met and not self._executor_busy:
+            # KEY NOTES:
+            # - Snapshot the queue at dispatch time
+            # - The executor works on this stable copy - independent of what the monitoring loop appends to self._queue on subsequent ticks while the executor runs
+            #
+            # OTHER NOTES:
+            # - list() on a deque is O(n) and thread-safe in CPython (the GIL protects the deque read)
+            # - The lock is NOT used here because the deque is only ever appended to by the sync side - the executor never writes to it, so there is no write-write race
+            
+            queue_snapshot = list(self._queue)
+
+            with self._slot_lock:
+                self._executor_busy = True
+
+            thread = threading.Thread(
+                target = self._run_executor,
+                args   = (queue_snapshot, context.tick),
+                daemon = True,
+                # NOTE: daemon=True: executor will not prevent process exit if the simulation ends while it is still running. Acceptable for simulation; revisit for PROD.
+            )
+            thread.start()
 
         # ------------------------------------------------------------------
         # [3] Return last committed decisions
@@ -273,6 +347,236 @@ class LLMAgentWrapper(BaseAgent):
             # sim_id is copied from context to the envelope so Her Majesty Reshma the Boss can attach it to LangFuse traces on the executor side without unpacking the full context. See llm_agent_wrapper_types.py.
             sim_id                 = context.sim_id,
         )
+
+    # ------------------------------------------------------------------
+    # Executor thread
+    # ------------------------------------------------------------------
+
+    def _run_executor(
+        self,
+        queue_snapshot: list[QueueMessage],
+        current_tick:   int,
+    ) -> None:
+        '''
+        - Executor thread entry point
+        - Runs asynchronously - never called by the sync side of decide() directly, only via threading.Thread
+
+        Steps:
+        1. Drain queue_snapshot to the latest non-outdated QueueMessage.
+        2. Call real LLM (or StubLLMAgent for testing) with the context.
+        3. Structural pre-flight validation.
+        4. Logical pre-flight validation (if structural passed).
+        5. Apply RuleBasedAgent fallback if either check fails.
+        6. Write ExecutorResult to `_result_slot`; mark executor idle.
+
+        On all-outdated queue: log EXECUTOR_ALL_STALE event and return without writing to `_result_slot. _last_committed` is unchanged - holding is correct when every available context is stale.
+        
+        ---
+
+        PARAMETERS:
+        - `queue_snapshot` (list): Snapshot (local point-in-time copy) of the queue
+        - `current_tick` (int): Current tick number
+
+        RETURNS:
+        - None
+        '''
+
+        # Step 1: Drain to latest non-outdated QueueMessage
+        #
+        # Iterate newest-to-oldest (reversed). A message assembled at tick T is stale if: current_tick - T > obsolescence_threshold (K).
+        #
+        # NOTE:
+        # - We want the LATEST non-outdated message
+        # - Newest-first means the first non-outdated message encountered is the correct one
+        # - The drain logic is in full regardless of queue_size so larger sizes work without code changes
+        # - With queue_size=1 this is trivially always the only message
+        chosen = None
+        for msg in reversed(queue_snapshot):
+            if (current_tick - msg.trigger_tick) <= msg.obsolescence_threshold:
+                chosen = msg
+                break
+
+        if chosen is None:
+            # CASE: Every message is stale:
+            # - Log a warning event so post-run analysis can identify ticks where the executor had nothing actionable
+            # - Writing nothing to _result_slot is correct - acting on a stale context is worse than holding
+            self._logger.executor_all_stale(
+                event_type = "EXECUTOR_ALL_STALE",
+                tick       = current_tick,
+                queue_size = len(queue_snapshot),
+                oldest_tick = queue_snapshot[0].trigger_tick  if queue_snapshot else None,
+                newest_tick = queue_snapshot[-1].trigger_tick if queue_snapshot else None,
+            )
+            with self._slot_lock:
+                self._executor_busy = False
+            return
+
+        context = chosen.context
+
+        # Step 2: LLM call (or StubLLMAgent for testing)
+        #
+        # NOTE: Use of stug agent:
+        # - _StubLLMAgent.respond() stands in for the HTTP call to the real LLM
+        # - stub_mode=None means a real LLM call should be made
+        # - _StubLLMAgent is not used in that path (placeholder comment for future)
+        # - Pre-flight validation below is unchanged regardless of source
+        if self._config.stub_mode is not None:
+            stub = _StubLLMAgent(self._config.stub_mode)
+            raw_response = stub.respond(context)
+        else:
+            # FUTURE: replace with real LLM HTTP call and response parsing.
+            raise NotImplementedError("Real LLM call not yet implemented.")
+
+        # Step 3: Structural validation
+        #
+        # Can the response be parsed into list[ReorderDecision]?
+        #
+        # - The LLMAgentWrapper's pre-flight validation is the PRIMARY defence
+        # - It must intercept invalid responses before they reach the runner
+        # - The runner's _validate_decisions raises ValueError with no recovery; it is a last-resort safety net only
+        fallback_type = None
+        decisions, structural_error = self._validate_structural(raw_response)
+
+        if structural_error is not None:
+            self._logger.fallback_structural(
+                tick         = current_tick,
+                raw_response = str(raw_response),
+                error        = structural_error
+            )
+            fallback_type = "FALLBACK_STRUCTURAL"
+            decisions     = self._fallback_agent.decide(context)
+
+        else:
+            # Step 4: Logical validation
+            #
+            # - Structurally valid but semantically wrong responses are a distinct failure mode from parse failures
+            # - They get a distinct event type (FALLBACK_LOGICAL vs FALLBACK_STRUCTURAL) so post-run analysis can distinguish them.
+            #
+            # Checks per decision:
+            # - item_id is known in context.item_states
+            # - order_qty >= 0
+            # - hold (order_qty == 0) is always valid
+            # - min_order_qty <= order_qty <= max_order_qty for reorders
+            logical_violations = self._validate_logical(decisions, context)
+
+            if logical_violations:
+                self._logger.fallback_logical(
+                    tick         = current_tick,
+                    violations   = logical_violations
+                )
+                fallback_type = "FALLBACK_LOGICAL"
+                decisions     = self._fallback_agent.decide(context)
+
+        # Step 6: Write result and mark idle
+        #
+        # - Both writes are inside the lock so the sync side always sees a consistent pair:
+        #       either (slot=None, busy=True) while running
+        #       or (slot=result, busy=False) when done
+        # - There is no window where busy=False but slot is still None after a completed execution
+        result = ExecutorResult(
+            decisions        = decisions,
+            produced_at_tick = chosen.trigger_tick,
+            fallback_used    = fallback_type is not None,
+            fallback_type    = fallback_type,
+        )
+        with self._slot_lock:
+            self._result_slot   = result
+            self._executor_busy = False
+
+    # ------------------------------------------------------------------
+    # Pre-flight validation helpers
+    # ------------------------------------------------------------------
+
+    def _validate_structural(
+        self,
+        raw_response: object,
+    ) -> "tuple[Optional[list[ReorderDecision]], Optional[str]]":
+        '''
+        Check whether `raw_response` is a list[ReorderDecision]:
+        - Returns (decisions, None) on success
+        - Returns (None, error_message) on failure
+
+        NOTE: Stub phase:
+        - In the stub phase, `valid` and `logical_fail` modes return a list[ReorderDecision] directly (no parsing needed)
+        - `structural_fail` mode returns a string
+        - In the real LLM phase, this method will also handle JSON parsing of the LLM text response
+        
+        ---
+
+        PARAMETERS:
+        - `raw_response` (object): Raw response
+
+
+        RETURNS:
+        - (list[ReorderDecision], optional): List of reorder decisions (only given on success)
+        - (str, optional): Error message (only given on failure)
+        '''
+
+        if isinstance(raw_response, list) and all(
+            isinstance(d, ReorderDecision) for d in raw_response
+        ):
+            return raw_response, None
+        return None, (
+            f"Response is not a list[ReorderDecision]: "
+            f"got {type(raw_response).__name__}"
+        )
+
+    def _validate_logical(
+        self,
+        decisions: "list[ReorderDecision]",
+        context:   AgentContext,
+    ) -> list:
+        '''
+        Check semantic correctness of a structurally valid decision list.
+
+        NOTE:
+        - Returns a list of violation dicts (empty = all valid)
+        - Each dict contains enough context for the FALLBACK_LOGICAL event payload
+
+        ---
+
+        PARAMETERS:
+        - `decisions` (list[ReorderDecision]): List of reorder decisions given by agent
+        - `context`
+        '''
+        
+        violations = []
+        for decision in decisions:
+            item_state = context.item_states.get(decision.item_id)
+
+            if item_state is None:
+                violations.append({
+                    "violation_type":  "unknown_item_id",
+                    "item_id":         decision.item_id,
+                    "offending_value": decision.item_id,
+                })
+                continue
+
+            if decision.order_qty < 0:
+                violations.append({
+                    "violation_type":  "negative_order_qty",
+                    "item_id":         decision.item_id,
+                    "offending_value": decision.order_qty,
+                })
+                continue
+
+            # Hold (order_qty == 0) is always logically valid.
+            if decision.order_qty == 0:
+                continue
+
+            if not (item_state.min_order_qty <= decision.order_qty <= item_state.max_order_qty):
+                violations.append({
+                    "violation_type":  "order_qty_out_of_range",
+                    "item_id":         decision.item_id,
+                    "offending_value": decision.order_qty,
+                    "min_order_qty":   item_state.min_order_qty,
+                    "max_order_qty":   item_state.max_order_qty,
+                })
+        return violations
+
+    # ------------------------------------------------------------------
+    # Monitoring loop helpers (Stage 5 - unchanged)
+    # ------------------------------------------------------------------
 
     def _write_eval_metrics(self, context: AgentContext) -> None:
         '''
@@ -371,6 +675,87 @@ class LLMAgentWrapper(BaseAgent):
                 .write
                 .mode("append")
                 .saveAsTable(_EVAL_METRICS_TABLE)
+            )
+
+
+# ---------------------------------------------------------------------------
+# _StubLLMAgent (simulation phase only)
+# ---------------------------------------------------------------------------
+
+class _StubLLMAgent:
+    '''
+    Stands in for the HTTP call to the real LLM during the stub testing phase.
+
+    Not a BaseAgent subclass - it does not implement the agent contract.
+    It replaces only the LLM call itself inside _run_executor, not the full
+    agent pipeline. Pre-flight validation and fallback routing apply to its
+    output exactly as they would to a real LLM response.
+
+    Three modes, set via LLMAgentWrapperConfig.stub_mode:
+
+      "valid"
+        Returns one correct ReorderDecision per item.
+        order_qty = min_order_qty for all items (always passes validation).
+        Exercises the happy path: LLM response -> runner.
+
+      "structural_fail"
+        Returns a raw string that cannot be parsed as list[ReorderDecision].
+        Exercises: FALLBACK_STRUCTURAL event -> RuleBasedAgent -> runner.
+
+      "logical_fail"
+        Returns a structurally valid list[ReorderDecision] but with
+        order_qty = max_order_qty + 1 for every item, guaranteed to fail
+        the logical range check.
+        Exercises: FALLBACK_LOGICAL event -> RuleBasedAgent -> runner.
+
+      None
+        Indicates a real LLM call should be made. _StubLLMAgent should not
+        be instantiated in this case - _run_executor routes to the real LLM
+        call instead (not yet implemented).
+    '''
+
+    def __init__(self, stub_mode: Optional[str]) -> None:
+        self._mode = stub_mode
+
+    def respond(self, context: AgentContext) -> object:
+        '''
+        Return a stub response for the given context.
+
+        Return type is deliberately 'object' - structural validation in
+        _validate_structural checks whether it is actually list[ReorderDecision].
+        '''
+        if self._mode == "valid":
+            # min_order_qty is always within [min_order_qty, max_order_qty],
+            # so this always passes logical validation.
+            return [
+                ReorderDecision(
+                    item_id   = item_id,
+                    order_qty = state.min_order_qty,
+                    reasoning = "StubLLMAgent (valid): ordering min_order_qty.",
+                )
+                for item_id, state in context.item_states.items()
+            ]
+
+        elif self._mode == "structural_fail":
+            # A raw string - _validate_structural will reject this.
+            return "STUB_STRUCTURAL_FAIL: this is not a list[ReorderDecision]."
+
+        elif self._mode == "logical_fail":
+            # order_qty = max_order_qty + 1 is guaranteed out-of-range.
+            return [
+                ReorderDecision(
+                    item_id   = item_id,
+                    order_qty = state.max_order_qty + 1,
+                    reasoning = "StubLLMAgent (logical_fail): order_qty intentionally out of range.",
+                )
+                for item_id, state in context.item_states.items()
+            ]
+
+        else:
+            # stub_mode=None should never reach here - _run_executor guards it.
+            raise ValueError(
+                "_StubLLMAgent instantiated with stub_mode=None. "
+                "Route to the real LLM call instead."
             )
 
 

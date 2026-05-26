@@ -686,32 +686,24 @@ class _StubLLMAgent:
     '''
     Stands in for the HTTP call to the real LLM during the stub testing phase.
 
-    Not a BaseAgent subclass - it does not implement the agent contract.
-    It replaces only the LLM call itself inside _run_executor, not the full
-    agent pipeline. Pre-flight validation and fallback routing apply to its
-    output exactly as they would to a real LLM response.
+    NOTE:
+    - Not a BaseAgent subclass - it does not implement the agent contract
+    - It replaces only the LLM call itself inside _run_executor, not the full agent pipeline
+    - Pre-flight validation and fallback routing apply to its output exactly as they would to a real LLM response
 
-    Three modes, set via LLMAgentWrapperConfig.stub_mode:
+    3 modes, set via LLMAgentWrapperConfig.stub_mode:
 
-      "valid"
-        Returns one correct ReorderDecision per item.
-        order_qty = min_order_qty for all items (always passes validation).
-        Exercises the happy path: LLM response -> runner.
-
-      "structural_fail"
-        Returns a raw string that cannot be parsed as list[ReorderDecision].
-        Exercises: FALLBACK_STRUCTURAL event -> RuleBasedAgent -> runner.
-
-      "logical_fail"
-        Returns a structurally valid list[ReorderDecision] but with
-        order_qty = max_order_qty + 1 for every item, guaranteed to fail
-        the logical range check.
-        Exercises: FALLBACK_LOGICAL event -> RuleBasedAgent -> runner.
-
-      None
-        Indicates a real LLM call should be made. _StubLLMAgent should not
-        be instantiated in this case - _run_executor routes to the real LLM
-        call instead (not yet implemented).
+    - "valid"
+        - Returns one correct ReorderDecision per item
+        - `order_qty` = `min_order_qty` for all items (always passes validation
+        - Exercises the happy path: LLM response -> runner
+      - "structural_fail"
+        - Returns a raw string that cannot be parsed as list[ReorderDecision].
+        - Exercises: `FALLBACK_STRUCTURAL` event -> RuleBasedAgent -> runner
+      - "logical_fail"
+        - Returns a structurally valid list[ReorderDecision] but with order_qty = max_order_qty + 1 for every item, guaranteed to fail the logical range check
+        - Exercises: `FALLBACK_LOGICAL` event -> RuleBasedAgent -> runner
+    - None: Indicates a real LLM call should be made. _StubLLMAgent should not be instantiated in this case - `_run_executor` routes to the real LLM call instead (not yet implemented
     '''
 
     def __init__(self, stub_mode: Optional[str]) -> None:
@@ -721,9 +713,17 @@ class _StubLLMAgent:
         '''
         Return a stub response for the given context.
 
-        Return type is deliberately 'object' - structural validation in
-        _validate_structural checks whether it is actually list[ReorderDecision].
+        Return type is deliberately 'object' - structural validation in _validate_structural checks whether it is actually list[ReorderDecision].
+        
+        ---
+
+        PARAMETERS:
+        - `context` (AgentContext): AgentContext instance encapsulating the context necessary for reasoning
+        
+        RETURNS:
+        - (object): Response object
         '''
+
         if self._mode == "valid":
             # min_order_qty is always within [min_order_qty, max_order_qty],
             # so this always passes logical validation.

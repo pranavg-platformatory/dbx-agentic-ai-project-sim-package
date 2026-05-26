@@ -1,3 +1,13 @@
+'''
+warehouse_sim/config/llm_agent_wrapper_config.py
+
+Defines LLMAgentWrapperConfig, which contains the configuration for the LLM Agent Wrapper (LLAgentWrapper, warehouse_sim/agent/llm_agent_wrapper.py).
+
+NOTE: Kept separate from SimConfig (warehouse_sim/config/models.py):
+- These configuration parameters govern the wrapper's behaviour, not the simulation's
+- Hence, they must be independently configurable and logged to MLflow independently
+'''
+
 from __future__ import annotations
 
 from typing import Literal
@@ -5,17 +15,18 @@ from typing import Literal
 from pydantic import BaseModel, Field, model_validator
 
 
-class LLAgentWrapperConfig(BaseModel):
+class LLMAgentWrapperConfig(BaseModel):
     '''
     Configuration for the LLM Agent Wrapper (LLAgentWrapper).
 
     Kept separate from SimConfig (warehouse_sim/config/models.py):
-    - These parameters govern the wrapper's behaviour, not the simulation's
+    - These configuration parameters govern the wrapper's behaviour, not the simulation's
     - Hence, they must be independently configurable and logged to MLflow independently
 
     ---
 
-    PARAMETERS:
+    # Fields:
+
     - `executor_trigger_every_n_ticks` (int): How often (in ticks) the executor is dispatched. \n
       NOTE:  No default: must be set explicitly to prevent silent non-reproducibility
     - `context_obsolescence_threshold_k` (int): A context assembled at tick T is considered stale if current_tick - T > K
@@ -69,12 +80,12 @@ class LLAgentWrapperConfig(BaseModel):
     )
 
     @model_validator(mode="after")
-    def warn_if_k_not_set(self) -> LLAgentWrapperConfig:
+    def warn_if_k_not_set(self) -> LLMAgentWrapperConfig:
         '''
         Remind implementers that K=None will be resolved at LLAgentWrapper init time.
 
         NOTE:
-        - None is intentionally valid here: LLAgentWrapperConfig may be constructed before SimConfig is available, and the correct default (`min_lead_time`) can only be read from SimConfig
+        - None is intentionally valid here: LLMAgentWrapperConfig may be constructed before SimConfig is available, and the correct default (`min_lead_time`) can only be read from SimConfig
         - Raising at construction time would prevent this legitimate workflow
         - A warning (not an error) makes the deferred resolution visible without blocking it
         - The LLAgentWrapper is responsible for resolving None to `min_lead_time` at initialisation and logging the resolved value to MLflow - never None
@@ -85,7 +96,7 @@ class LLAgentWrapperConfig(BaseModel):
         - None
 
         RETURNS:
-        - (LLAgentWrapperConfig): LLAgentWrapperConfig instance encapsulating LLMAgentWrapper configuration
+        - (LLMAgentWrapperConfig): LLMAgentWrapperConfig instance encapsulating LLMAgentWrapper configuration
         '''
 
         if self.context_obsolescence_threshold_k is None:

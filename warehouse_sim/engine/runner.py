@@ -348,9 +348,56 @@ class SimRunner:
         # ----------------------------------------------------------------
         # [4] Agent decides
         # ----------------------------------------------------------------
-        context   = self._build_agent_context(tick, activations)
-        decisions = self._agent.decide(context)
-        self._validate_decisions(decisions, context)
+        context = self._build_agent_context(tick, activations)
+
+        '''
+        RESILIENCE WRAP
+        - `_validate_decisions` raises ValueError if the agent returns missing items or out-of-bounds quantities
+        - Without a try/except here, any unhandled exception from either call halts the simulation entirely with no recovery
+        
+        NOTE:
+        - The LAWO's internal pre-flight validation (structural + logical checks) is the primary defence
+        - It intercepts invalid responses before they reach this point and substitutes RuleBasedAgent decisions
+        - This try/except is therefore a last-resort safety net, not the main fallback mechanism.
+        
+        On catch:
+        - An `AGENT_ERROR` event is logged with the exception type and message for post-run diagnostics
+        - Hold decisions (order_qty=0) are substituted for all items
+        - Hold is the safest possible fallback: it:
+            - Places no orders
+            - Violates no budget or quantity constraints
+            - Does not require the RuleBasedAgent to be instantiated here
+              ... which would couple the runner to the agent layer beyond the BaseAgent contract!
+        - The simulation continues
+        
+        KEY POINTS:
+        - An agent-layer failure is not a reason to discard the entire run
+        - Genuine unrecoverable errors (engine-level exceptions outside this block) still propagate normally
+        '''
+
+        try:
+            decisions = self._agent.decide(context)
+            self._validate_decisions(decisions, context)
+        except Exception as exc:
+            self._logger.agent_error(
+                tick     = tick,
+                exc_type = type(exc).__name__,
+                exc_msg  = str(exc),
+            )
+            # Substitute hold decisions for every item in the current context.
+            # order_qty=0 is the hold signal recognised downstream; reasoning
+            # records that this was an emergency fallback, not an agent choice.
+            decisions = [
+                ReorderDecision(
+                    item_id   = item_id,
+                    order_qty = 0,
+                    reasoning = (
+                        f"AGENT_ERROR fallback (hold): "
+                        f"{type(exc).__name__}: {exc}"
+                    ),
+                )
+                for item_id in context.item_states
+            ]
 
         placed_orders: list[PlacedOrder] = []
         tick_order_costs: dict[str, float] = {i: 0.0 for i in self._world.items}

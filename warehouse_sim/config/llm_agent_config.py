@@ -1,0 +1,101 @@
+from __future__ import annotations
+
+from typing import Literal
+
+from pydantic import BaseModel, Field, model_validator
+
+
+class LLAgentWrapperConfig(BaseModel):
+    '''
+    Configuration for the LLM Agent Wrapper (LLAgentWrapper).
+
+    Kept separate from SimConfig (warehouse_sim/config/models.py):
+    - These parameters govern the wrapper's behaviour, not the simulation's
+    - Hence, they must be independently configurable and logged to MLflow independently
+
+    ---
+
+    PARAMETERS:
+    - `executor_trigger_every_n_ticks` (int): How often (in ticks) the executor is dispatched. \n
+      NOTE:  No default: must be set explicitly to prevent silent non-reproducibility
+    - `context_obsolescence_threshold_k` (int): A context assembled at tick T is considered stale if current_tick - T > K
+        - Defaults to None, in which case the LLAgentWrapper resolves K to the minimum lead time from SimConfig at initialisation
+        - The resolved value is what is logged to MLflow - not Non
+    - `queue_size` (int): Maximum number of QueueMessage objects the monitoring loop retains
+        - Drain logic is always implemented in full regardless of this value
+        - Defaults to 1
+    - `stub_mode` (str): Controls the StubLLMAgent behaviour used in place of a real LLM call
+        - "valid": returns correctly structured, logically valid decisions
+        - "structural_fail": returns a malformed / unparseable response
+        - "logical_fail": returns a parsed but logically invalid response
+        - None: no stub; a real LLM call is made
+    
+    NOTE: `stub_mode` is always present and always logged to MLflow so it is unambiguous whether a run used the stub or not.
+    '''
+
+    executor_trigger_every_n_ticks: int = Field(
+        ...,
+        description=(
+            "Executor dispatch frequency in ticks. "
+            "No default - must be set explicitly."
+        ),
+        ge=1,
+    )
+
+    context_obsolescence_threshold_k: int | None = Field(
+        default=None,
+        description=(
+            "Staleness cutoff in ticks. None resolves to min_lead_time "
+            "from SimConfig at LLAgentWrapper initialisation."
+        ),
+        # ge=1 applies only when a value is explicitly set. Pydantic skips
+        # field-level validators for None on an int | None field, so there
+        # is no conflict with the None default.
+        ge=1,
+    )
+
+    queue_size: int = Field(
+        default=1,
+        description="Maximum QueueMessage retention. Drain logic runs in full for any value.",
+        ge=1,
+    )
+
+    stub_mode: Literal["valid", "structural_fail", "logical_fail"] | None = Field(
+        default=None,
+        description=(
+            "StubLLMAgent mode. None means a real LLM call is made. "
+            "Always logged to MLflow."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def warn_if_k_not_set(self) -> LLAgentWrapperConfig:
+        '''
+        Remind implementers that K=None will be resolved at LLAgentWrapper init time.
+
+        NOTE:
+        - None is intentionally valid here: LLAgentWrapperConfig may be constructed before SimConfig is available, and the correct default (`min_lead_time`) can only be read from SimConfig
+        - Raising at construction time would prevent this legitimate workflow
+        - A warning (not an error) makes the deferred resolution visible without blocking it
+        - The LLAgentWrapper is responsible for resolving None to `min_lead_time` at initialisation and logging the resolved value to MLflow - never None
+        
+        ---
+
+        PARAMETERS:
+        - None
+
+        RETURNS:
+        - (LLAgentWrapperConfig): LLAgentWrapperConfig instance encapsulating LLMAgentWrapper configuration
+        '''
+
+        if self.context_obsolescence_threshold_k is None:
+            import warnings
+            warnings.warn(
+                "context_obsolescence_threshold_k is None. "
+                "The LLAgentWrapper will resolve this to min_lead_time from SimConfig at "
+                "initialisation. Ensure SimConfig is available before the LLAgentWrapper is "
+                "constructed, and log the resolved value to MLflow - not None.",
+                UserWarning,
+                stacklevel=2,
+            )
+        return self

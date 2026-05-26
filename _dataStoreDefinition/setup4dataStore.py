@@ -712,6 +712,51 @@
 
 # COMMAND ----------
 
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## `hist_eval_metrics`
+# MAGIC
+# MAGIC > **Added during LLM agent development (LLMAgentWrapper - Stage 4)**:
+# MAGIC > 
+# MAGIC > - Written by the LLMAgentWrapper monitoring loop on every tick
+# MAGIC > - Pull consumers (LangFuse, MLflow, dashboards) read from this table on their own schedule <br> *The monitoring loop has no direct dependency on any of them*
+# MAGIC > - Evaluation metrics are also queryable by the reasoning system via UC read functions over this table, consistent with the tool abstraction layer <br> See "DMP 4. Tool Abstraction Layer" from `__docs__/reasoningIntegrationSpecs-2.md`
+# MAGIC
+# MAGIC **NOTE: Narrow/tall table schema: one row per metric per tick (per item where applicable)**: This keeps the schema stable as new metrics are added - a new metric means a new row, not a column alter. `item_id` is nullable: NULL means the metric is run-level; a populated value means it is item-level.
+# MAGIC
+# MAGIC | Column | Type | Description |
+# MAGIC |---|---|---|
+# MAGIC | `sim_id` | string FK | Simulation run |
+# MAGIC | `tick` | integer | Tick at which the metric was evaluated |
+# MAGIC | `item_id` | string FK, nullable | Item the metric applies to; NULL for run-level metrics |
+# MAGIC | `metric_name` | string | Metric identifier (e.g. `stockout_rate`, `holding_cost_delta`) |
+# MAGIC | `metric_value` | float | Computed metric value |
+# MAGIC | `logged_at` | timestamp | Wall-clock time the row was written |
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC CREATE TABLE IF NOT EXISTS hackathon_of_the_century.tables4hist.hist_eval_metrics (
+# MAGIC
+# MAGIC  sim_id STRING NOT NULL COMMENT 'Foreign key to env_sim_config.sim_id. Identifies the simulation run.',
+# MAGIC  tick INT NOT NULL COMMENT 'Simulation tick at which this metric was evaluated by the LLMAgentWrapper monitoring loop.',
+# MAGIC  item_id STRING COMMENT 'Foreign key to env_item_types.item_id. NULL for run-level metrics; populated for item-level metrics.',
+# MAGIC  metric_name STRING NOT NULL COMMENT 'Metric identifier. Examples: stockout_rate, holding_cost_delta, unmet_demand_pct. One row per metric per tick; add new metrics as new rows without altering this schema.',
+# MAGIC  metric_value DOUBLE NOT NULL COMMENT 'Computed value of the metric for this tick and item (or run level if item_id is NULL). All metrics are numeric; non-numeric evaluation outputs warrant a separate design decision.',
+# MAGIC  logged_at TIMESTAMP NOT NULL COMMENT 'Wall-clock timestamp at which this row was written by the LLMAgentWrapper monitoring loop. Not a simulation time - use tick for simulation-time ordering.',
+# MAGIC
+# MAGIC  CONSTRAINT pk_hist_eval_metrics PRIMARY KEY (sim_id, tick, item_id, metric_name)
+# MAGIC )
+# MAGIC USING DELTA
+# MAGIC COMMENT 'Append-only record of evaluation metrics computed by the LLMAgentWrapper monitoring loop, one row per metric per tick. Pull consumers (LangFuse, MLflow, dashboards) read from this table downstream - the monitoring loop writes here and nowhere else. item_id is nullable: NULL indicates a run-level metric; a populated value indicates an item-level metric.'
+# MAGIC TBLPROPERTIES (
+# MAGIC  'delta.appendOnly' = 'true',
+# MAGIC  'simulation.layer' = 'historical'
+# MAGIC )
+# MAGIC PARTITIONED BY (sim_id);
+
 # MAGIC %md
 # MAGIC # Event Log (`tables4eventlog`)
 

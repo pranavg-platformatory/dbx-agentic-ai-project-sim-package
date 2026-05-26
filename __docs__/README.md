@@ -2,9 +2,14 @@
 
 ---
 
+Simulation foundations:
+
 - [`simulationSpecs.md`](./simulationSpecs.md)
 - [`simulationSpecs-vs-ddlStatements.md`](./simulationSpecs-vs-ddlStatements.md)
 - [`simulationDevelopmentApproach.md`](./simulationDevelopmentApproach.md)
+
+Foundations for integrating LLM agent:
+
 - [`reasoningIntegrationSpecs-1.md`](./reasoningIntegrationSpecs-1.md)
 - [`reasoningIntegrationSpecs-2.md`](./reasoningIntegrationSpecs-2.md)
 - [`reasoningIntegrationSpecs-3.md`](./reasoningIntegrationSpecs-3.md)

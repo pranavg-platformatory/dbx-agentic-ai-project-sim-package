@@ -265,7 +265,7 @@ print("✓ ContinuousReorderAgent defined")
 
 from warehouse_sim.config.loader import load_world
 from warehouse_sim.world.patterns import PatternSampler
-from warehouse_sim.eventlog.event_log import EventLogger
+from warehouse_sim.event_log.event_log import EventLogger
 from warehouse_sim.engine.continuous import ContinuousRunner, ProgressConfig
 
 world_rt = load_world(spark, sim_id=SIM_ID)

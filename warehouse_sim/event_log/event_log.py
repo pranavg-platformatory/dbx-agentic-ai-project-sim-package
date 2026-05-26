@@ -1,5 +1,5 @@
 '''
-warehouse_sim/eventlog/event_log.py
+warehouse_sim/event_log/event_log.py
 
 Append-only event writer for the simulation event log.
 
@@ -24,7 +24,7 @@ __docs__/simulationSpecs.md
 Usage:
 
 ```
-from warehouse_sim.eventlog.event_log import EventLogger
+from warehouse_sim.event_log.event_log import EventLogger
 logger = EventLogger(spark, sim_id="sim_001")
 logger.sim_started(tick=0, config_snapshot={"num_ticks": 30, ...})
 ```

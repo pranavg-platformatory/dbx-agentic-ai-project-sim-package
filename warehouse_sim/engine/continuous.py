@@ -43,7 +43,7 @@ from typing import Optional, TYPE_CHECKING
 from .runner import SimRunner
 from ..config.models import SimWorld
 from ..world.patterns import PatternSampler
-from ..eventlog.event_log import EventLogger
+from ..event_log.event_log import EventLogger
 from ..agent.base import BaseAgent
 
 # NOTE: PatternSampler is kept in the constructor signature for consistency

@@ -39,7 +39,7 @@
 
 import sys
 
-PACKAGE_ROOT = "/Workspace/Repos/reshmaupadhyaya5@gmail.com/dbx-agentic-ai-project-sim-package"
+PACKAGE_ROOT = "/Workspace/Repos/mistermilvusmigrans@gmail.com/dbx-agentic-ai-project-sim-package"
 if PACKAGE_ROOT not in sys.path:
     sys.path.insert(0, PACKAGE_ROOT)
 

@@ -6,12 +6,11 @@ LLM Agent Wrapper Object (LLMAgentWrapper) - Stage 6: executor thread and shared
 NOTE: For documentation on stages, see __docs__/reasoningIntegrationDevelopmentApproach-3.md.
 
 Extends Stage 5 (monitoring loop) with the async executor half:
-- Shared result slot (_result_slot, _executor_busy, _last_committed)
+- Shared result slot (`_result_slot`, `_executor_busy`, `_last_committed`)
 - Trigger condition check and executor thread dispatch (queue snapshot on dispatch)
-- Executor thread: drain logic, StubLLMAgent call, pre-flight validation,
-  fallback routing, ExecutorResult write to slot
-- Slot consumption on the sync side at the top of each decide() call
-- StubLLMAgent with three modes (valid, structural_fail, logical_fail)
+- Executor thread: drain logic, StubLLMAgent call, pre-flight validation, fallback routing, ExecutorResult write to slot
+- Slot consumption on the sync side at the top of each `decide()` call
+- StubLLMAgent with three modes (`valid`, `structural_fail`, `logical_fail`)
 
 Stage 5 summary (monitoring loop - unchanged):
 - Assemble QueueMessage from the current AgentContext each tick
@@ -23,15 +22,15 @@ Stage 5 summary (monitoring loop - unchanged):
 
 DEPENDENCY FLAGS:
 
-[DEP-1] EventLogger.agent_error():
+[DEP-1] `EventLogger.agent_error()`:
 - Called in runner.py's resilience wrap (Stage 3) when the agent raises an unhandled exception
 - This method does not yet exist on EventLogger - it must be added before the Stage 3 change can be tested end-to-end
-- The addition follows the same pattern as every other event method on the logger (same payload structure as FALLBACK_STRUCTURAL / FALLBACK_LOGICAL defined in Stage 6)
+- The addition follows the same pattern as every other event method on the logger (same payload structure as `FALLBACK_STRUCTURAL` / `FALLBACK_LOGICAL` defined in Stage 6)
 
-[DEP-2] SimWorld.suppliers (min_lead_time resolution):
-- __init__ resolves context_obsolescence_threshold_k=None to the minimum base_lead_time_ticks across all suppliers in the world
+[DEP-2] SimWorld.suppliers (`min_lead_time` resolution):
+- `__init__` resolves `context_obsolescence_threshold_k`=None to the minimum `base_lead_time_ticks` across all suppliers in the world
 - This reads world.suppliers, which is a dict[str, Supplier] based on the runner's usage pattern
-- If the SimWorld structure differs, the resolution logic in __init__ must be updated accordingly
+- If the SimWorld structure differs, the resolution logic in `__init__` must be updated accordingly
 
 [DEP-3] "hist_eval_metrics" table (Stage 4):
 - _write_eval_metrics writes to hackathon_of_the_century.tables4hist.hist_eval_metrics
@@ -41,12 +40,12 @@ DEPENDENCY FLAGS:
 
 [DEP-4] SparkSession:
 - _write_eval_metrics needs a SparkSession to write to Delta
-- The runner holds self._spark but does not pass it to agent.decide()
+- The runner holds `self._spark` but does not pass it to `agent.decide()`
 - 2 options:
-    (a) Inject SparkSession into LLMAgentWrapper.__init__ (chosen here)
-    (b) Write metrics via a side-channel outside decide()
+    (a) Inject SparkSession into `LLMAgentWrapper.__init__` (chosen here)
+    (b) Write metrics via a side-channel outside `decide()`
 - Option (a) is consistent with the runner's own pattern (spark injected at construction) and keeps decide() side-effect-free with respect to its caller
-- The SparkSession is stored as self._spark
+- The SparkSession is stored as `self._spark`
 '''
 
 from __future__ import annotations
@@ -667,7 +666,7 @@ class LLMAgentWrapper(BaseAgent):
         # ############ EVALUATION TOOL CALL BOUNDARY - END ############
 
         # Write all rows for this tick in a single Spark operation.
-        # One append per tick (not per row) to minimise write overhead.
+        # NOTE: One append per tick (not per row) to minimise write overhead.
         if rows:
             (
                 self._spark
@@ -713,7 +712,7 @@ class _StubLLMAgent:
         '''
         Return a stub response for the given context.
 
-        Return type is deliberately 'object' - structural validation in _validate_structural checks whether it is actually list[ReorderDecision].
+        NOTE: Return type is deliberately 'object' - structural validation in `_validate_structural` checks whether it is actually list[ReorderDecision].
         
         ---
 

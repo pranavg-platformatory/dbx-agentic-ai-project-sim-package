@@ -30,6 +30,18 @@
   - [Post-Development Notes](#post-development-notes-3)
     - [Key Points](#key-points)
     - [Completion Status](#completion-status)
+- [LLMAgentWrapper: LLM Agent Integration](#llmagentwrapper-llm-agent-integration)
+  - [Pre-Development Notes](#pre-development-notes-6)
+  - [Development Notes](#development-notes-1)
+    - [Staging overview](#staging-overview)
+    - [Stage 1 - `RuleBasedAgent`](#stage-1---rulebasedagent)
+    - [Stage 2 - `LLMAgentWrapperConfig`](#stage-2---llmagentwrapperconfig)
+    - [Stage 3 - `runner.py` resilience wrap](#stage-3---runnerpy-resilience-wrap)
+    - [Stage 4 - `hist_eval_metrics` DDL](#stage-4---hist_eval_metrics-ddl)
+    - [Stage 5 - `LLMAgentWrapper`: monitoring loop](#stage-5---llmagentwrapper-monitoring-loop)
+    - [Stage 6 - `LLMAgentWrapper`: executor thread and shared result slot](#stage-6---llmagentwrapper-executor-thread-and-shared-result-slot)
+    - [Stage 7 - MLflow integration](#stage-7---mlflow-integration)
+  - [Completion Status](#completion-status-1)
  
 ---
 
@@ -360,4 +372,189 @@ The output will be a Databricks notebook that pulls these views and renders them
 ✓ Stage 6   - Agent contract
   Stage 6   - Rule-based agent <- deferred
 ✓ Stage 7   - Full integration + visualisation
+```
+# LLMAgentWrapper: LLM Agent Integration
+- [`warehouse_sim/agent`](./warehouse_sim/agent/)
+    - `llm_agent_wrapper_types.py`
+    - `llm_agent_wrapper.py`
+- [`warehouse_sim/config`](./warehouse_sim/config/): `llm_agent_wrapper_config.py`
+
+## Pre-Development Notes
+
+Planning documents (in order):
+
+- [`__docs__/reasoningIntegrationSpecs-1.md`](./__docs__/reasoningIntegrationSpecs-1.md) - initial exploration of LLM integration approaches; tentative direction established as Suggestion 2 (structured context/response, monitoring loop + async executor)
+- [`__docs__/reasoningIntegrationSpecs-2.md`](./__docs__/reasoningIntegrationSpecs-2.md) - nine decision-making points raised; overall solution structure defined
+- [`__docs__/reasoningIntegrationSpecs-3.md`](./__docs__/reasoningIntegrationSpecs-3.md) - open concerns and sharpening notes raised against the above
+- [`__docs__/reasoningIntegrationSpecs-4.md`](./__docs__/reasoningIntegrationSpecs-4.md) - LLMAgentWrapper design (Pranav's scope) and feedback; all design-specific concerns resolved
+- [`__docs__/reasoningIntegrationSpecs-5.md`](./__docs__/reasoningIntegrationSpecs-5.md) - build considerations derived from reading existing code; MLflow parameter list defined
+- [`__docs__/reasoningIntegrationDevelopmentApproach-1.md`](./__docs__/reasoningIntegrationDevelopmentApproach-1.md) - implementation approach (what gets touched, external elements, stub phase flow)
+- [`__docs__/reasoningIntegrationDevelopmentApproach-2.md`](./__docs__/reasoningIntegrationDevelopmentApproach-2.md) - spec compliance comparison; partially addressed points flagged
+- [`__docs__/reasoningIntegrationDevelopmentApproach-3.md`](./__docs__/reasoningIntegrationDevelopmentApproach-3.md) - implementation stages with justification and dependency graph
+
+**Scope**: Pranav's scope only. Her Majesty Reshma the Boss's scope (UC read tool definitions, LangFuse trace structure) is tracked separately as open items in `__docs__/reasoningIntegrationSpecs-4`.
+
+---
+
+## Development Notes
+
+### Staging overview
+
+Seven stages, ordered by: dependencies before dependents → sync before async → tables before writers → observability last.
+
+```
+Stage 1   agent/rule_based_agent.py          RuleBasedAgent (deferred from sim Stage 6)
+Stage 2   config/llm_agent_wrapper_config.py LLMAgentWrapperConfig (Pydantic)
+Stage 3   engine/runner.py                   Resilience wrap around agent.decide()
+Stage 4   setup4dataStore.py                 hist_eval_metrics DDL
+Stage 5   agent/llm_agent_wrapper.py         LLMAgentWrapper - monitoring loop only
+Stage 6   agent/llm_agent_wrapper.py         Executor thread + shared result slot + StubLLMAgent
+Stage 7   (MLflow integration)               Run-level parameter logging - not yet done
+```
+
+---
+
+### Stage 1 - `RuleBasedAgent`
+
+**File**: `warehouse_sim/agent/rule_based_agent.py`
+
+Implements `RuleBasedAgent(BaseAgent)` deferred from simulation Stage 6. Rule: reorder when `stock_on_hand < reorder_point`, quantity = `min_order_qty`.
+
+Key points:
+- Fully deterministic - no stochastic draws, FR-07 reproducibility satisfied without threading the `PatternSampler` through
+- Returns `order_qty=0` for hold decisions, consistent with `REORDER_HELD` event semantics
+- Required as a dependency of the LLMAgentWrapper fallback path (`FALLBACK_STRUCTURAL` and `FALLBACK_LOGICAL`) before any LLMAgentWrapper code can be tested
+
+---
+
+### Stage 2 - `LLMAgentWrapperConfig`
+
+**File**: `warehouse_sim/config/llm_agent_wrapper_config.py`
+
+Pydantic model holding all LLMAgentWrapper-specific parameters, separate from `SimConfig`.
+
+Key points:
+- `executor_trigger_every_n_ticks` has no default - forced explicit configuration to prevent silent non-reproducibility
+- `context_obsolescence_threshold_k` defaults to `None`; resolved to `min_lead_time` from `SimConfig` at LLMAgentWrapper `__init__` time, not at config construction. A `UserWarning` is emitted when `None` to surface the deferred resolution without blocking the workflow. A comment explains why `UserWarning` rather than a hard validation error
+- `queue_size` defaults to 1; drain logic is implemented in full for all sizes
+- `stub_mode` defaults to `None` (live LLM); always present and always logged to MLflow so runs are unambiguously labelled
+
+---
+
+### Stage 3 - `runner.py` resilience wrap
+
+**File**: `warehouse_sim/engine/runner.py`
+
+Single `try/except` block added around `agent.decide(context)` and `_validate_decisions()` in `_run_tick`.
+
+Key points:
+- `_validate_decisions` is inside the `try` block because it raises `ValueError` with no recovery path - it must be covered by the same wrap
+- On catch: logs `AGENT_ERROR` event (exception type + message), substitutes hold-all decisions, simulation continues
+- Hold-all is the fallback (not `RuleBasedAgent`) to avoid coupling the runner to the agent layer beyond the `BaseAgent` contract
+- The LLMAgentWrapper's own pre-flight validation is the primary defence; this wrap is the last-resort safety net only
+
+**Dependency flag**: `EventLogger.agent_error()` does not yet exist - must be added before this change can be tested end-to-end. Follows the same pattern as every other typed event method on the logger.
+
+---
+
+### Stage 4 - `hist_eval_metrics` DDL
+
+**File**: `setup4dataStore.py` (new table added)
+
+Append-only Delta table written by the LLMAgentWrapper monitoring loop every tick. Added between `hist_cost_by_tick` and the Event Log section, keeping all `hist_*` tables together.
+
+Key points:
+- Narrow/tall schema: one row per metric per tick (per item where applicable). Adding a new metric means a new row, not a column alter
+- `item_id` is nullable: `NULL` = run-level metric; populated = item-level metric
+- `metric_value` typed as `DOUBLE` - all foreseeable metrics are numeric
+- Partitioned by `sim_id`, consistent with all other `hist_*` tables
+- PK on `(sim_id, tick, item_id, metric_name)` - monitoring loop must write at most one run-level row per metric per tick (item_id = NULL in a PK requires this discipline from the writer)
+
+---
+
+### Stage 5 - `LLMAgentWrapper`: monitoring loop
+
+**Files**: `warehouse_sim/agent/llm_agent_wrapper.py`, `warehouse_sim/agent/llm_agent_wrapper_types.py`
+
+Sync, tick-bound half of `LLMAgentWrapper.decide()` only. Executor half is a clearly marked `# STAGE 6` block placeholder.
+
+Key points:
+- `LLMAgentWrapper` is a `BaseAgent` subclass - the runner sees it as just another agent, with no awareness of the queue, monitoring loop, or LLM call inside
+- `context_obsolescence_threshold_k=None` resolved at `__init__` time from `min_lead_time` across `world.suppliers`. Resolved value stored as `self._resolved_k` - this is what gets logged to MLflow, never `None`
+- `_last_committed` initialised as hold-all at construction time, not `None` - `decide()` returns a valid `list[ReorderDecision]` from tick 0 with no `None` check in the hot path
+- `QueueMessage` and `ExecutorResult` live in `llm_agent_wrapper_types.py` - shared between sync and async sides without circular imports
+- `_write_eval_metrics` is bracketed with `EVALUATION TOOL CALL BOUNDARY` comments marking the exact block Her Majesty Reshma the Boss will instrument with LangFuse. Metric values are `0.0` stubs with named `# TODO` comments specifying the source fields
+- `SparkSession` injected at construction (not passed through `decide()`) - consistent with the runner's own pattern; `decide()` remains side-effect-free from the caller's perspective
+- Four dependency flags in module docstring (`[DEP-1]` through `[DEP-4]`) covering `EventLogger.agent_error()`, `SimWorld.suppliers` structure, `hist_eval_metrics` table existence, and `SparkSession` injection
+
+---
+
+### Stage 6 - `LLMAgentWrapper`: executor thread and shared result slot
+
+**File**: `warehouse_sim/agent/llm_agent_wrapper.py` (extended in place)
+
+Async half of `LLMAgentWrapper`, filling in the `# STAGE 6` placeholder.
+
+Key points:
+
+**Shared state and thread safety**:
+- `_result_slot`, `_executor_busy`, `_last_committed` are the three shared state attributes
+- A `threading.Lock` (`_slot_lock`) guards all reads and writes of `_result_slot` and `_executor_busy`. Rationale documented in code: CPython GIL makes bare assignment practically safe, but relying on GIL behaviour is an implementation detail, not a language guarantee - the lock makes intent explicit and ensures correctness outside CPython
+
+**Slot consumption ordering**:
+- Slot consumption happens at the top of `decide()`, before the trigger check. A result that arrived while the executor was running must be committed before deciding whether to dispatch again
+
+**Dispatch**:
+- Queue snapshot taken at dispatch time - the executor works on a stable copy independent of what the monitoring loop appends on subsequent ticks
+- `daemon=True` on the thread - executor will not prevent process exit if the simulation ends while running; noted as a PROD revisit point
+
+**Executor thread (`_run_executor`)**:
+- Drain logic iterates newest-to-oldest; first non-outdated message is used. Implemented in full regardless of `queue_size`
+- All-stale case: logs `EXECUTOR_ALL_STALE` event, clears `_executor_busy`, returns without writing to `_result_slot` - holding is correct when every available context is stale
+- Both `_result_slot` and `_executor_busy` written together inside one lock acquisition on completion, so the sync side always sees a consistent pair
+
+**Pre-flight validation**:
+- `_validate_structural`: checks response is `list[ReorderDecision]`. In stub phase, `valid`/`logical_fail` modes pass; `structural_fail` mode returns a raw string and fails here
+- `_validate_logical`: checks `item_id` known, `order_qty >= 0`, `min_order_qty <= order_qty <= max_order_qty` for reorders. Hold (`order_qty=0`) always passes
+- Each failure logs its distinct event (`FALLBACK_STRUCTURAL` / `FALLBACK_LOGICAL`) and substitutes `RuleBasedAgent` decisions
+
+**`_StubLLMAgent`**:
+- Private class, not a `BaseAgent` subclass - stands in for the HTTP call only
+- Three modes: `valid` (happy path), `structural_fail` (FALLBACK_STRUCTURAL path), `logical_fail` (FALLBACK_LOGICAL path). All three must be tested before stub is retired
+
+**Known gaps (from post-implementation evaluation)**:
+- `_executor_busy` read in trigger check is outside the lock - inconsistent with stated rationale; acceptable for CPython but should be addressed
+- No `finally` block in `_run_executor` - if `NotImplementedError` is raised (stub_mode=None), `_executor_busy` is never cleared; simulation silently stops dispatching. Needs a `finally` block
+- `_write_eval_metrics` has no error handling - a failed metric write should not halt the tick; needs a `try/except` with event log fallback
+- `EXECUTOR_ALL_STALE`, `FALLBACK_STRUCTURAL`, `FALLBACK_LOGICAL` event types added to `event_log` DDL ✓ (updated post-evaluation)
+
+---
+
+### Stage 7 - MLflow integration
+
+Not yet implemented. To be done at run start: log `agent_history_window_ticks`, `executor_trigger_every_n_ticks`, `context_obsolescence_threshold_k` (resolved value), `queue_size`, `agent_version`, `random_seed`.
+
+---
+
+## Completion Status
+
+```
+✓ Stage 1   - Data models & config loader
+✓ Stage 2+3 - World setup & pattern sampling
+✓ Stage 5   - Event logger
+✓ Stage 4   - Tick engine (core)
+✓ Stage 6   - Agent contract
+✓ Stage 6   - Rule-based agent (completed in LLMAgentWrapper Stage 1)
+✓ Stage 7   - Full integration + visualisation
+
+LLMAgentWrapper:
+✓ LLMAgentWrapper Stage 1  - RuleBasedAgent
+✓ LLMAgentWrapper Stage 2  - LLMAgentWrapperConfig
+✓ LLMAgentWrapper Stage 3  - runner.py resilience wrap
+✓ LLMAgentWrapper Stage 4  - hist_eval_metrics DDL
+✓ LLMAgentWrapper Stage 5  - LLMAgentWrapper monitoring loop
+✓ LLMAgentWrapper Stage 6  - Executor thread + shared result slot + StubLLMAgent
+  LLMAgentWrapper Stage 7  - MLflow integration                    <- next
+  Known gaps    - finally block, _executor_busy lock consistency, _write_eval_metrics error handling
+  Open (Her Majesty Reshma the Boss) - UC read tools, LangFuse trace structure
 ```

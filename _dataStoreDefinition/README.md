@@ -88,3 +88,6 @@ Append-only summaries that accumulate across ticks. Used for agent context and o
 | `COST_ACCRUED` | End-of-tick cost accumulation |
 | `TRANSIT_LOSS_APPLIED` | Units lost from an in-transit order |
 | `LEAD_TIME_EXTENDED` | Transit delay disruption increases a placed order's lead time |
+| `EXECUTOR_ALL_STALE` | Only stale agent context instances are available for the LLM agent wrapper's executor block |
+| `FALLBACK_STRUCTURAL` | Fallback to rule-based agent due to error in the structure of the LLM's response |
+| `FALLBACK_LOGICAL` | Fallback to rule-based agent due to error with respect to the logical constraints of the LLM's response |

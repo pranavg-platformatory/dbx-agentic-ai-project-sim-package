@@ -752,11 +752,7 @@ class _StubLLMAgent:
 
         else:
             # stub_mode=None should never reach here - _run_executor guards it.
-            raise ValueError(
-                "_StubLLMAgent instantiated with stub_mode=None. "
-                "Route to the real LLM call instead."
-            )
-
+            raise ValueError("_StubLLMAgent instantiated with stub_mode=None. Route to the real LLM call instead.")
 
 # ---------------------------------------------------------------------------
 # Module-level helper

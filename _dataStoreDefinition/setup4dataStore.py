@@ -798,6 +798,9 @@
 # MAGIC | `COST_ACCRUED` | End-of-tick cost accumulation | `holding_cost`, `stockout_cost`, `order_cost`, `transit_loss_cost`, `tick_total` |
 # MAGIC | `TRANSIT_LOSS_APPLIED` | Units lost from an in-transit order | `order_id`, `lost_qty`, `arrived_qty`, `disruption_id` |
 # MAGIC | `LEAD_TIME_EXTENDED` | Transit delay disruption increases lead time of a placed order | `order_id`, `original_lead_time`, `extended_lead_time`, `disruption_id` |
+# MAGIC | `EXECUTOR_ALL_STALE` | Only stale agent context instances are available for the LLM agent wrapper's executor block | `queue_size`, `oldest_tick`, `newest_tick`, `current_tick` |
+# MAGIC | `FALLBACK_STRUCTURAL` | Fallback to rule-based agent due to error in the structure of the LLM's response | `raw_response`, `error` |
+# MAGIC | `FALLBACK_LOGICAL` | Fallback to rule-based agent due to error with respect to the logical constraints of the LLM's response | `violations` |
 # MAGIC
 # MAGIC > **⚠️ SUGGESTION (important)** - *`TICK_STARTED` and `TICK_ENDED` events have been added to the table above. These bookend every tick in the log, making it possible to distinguish quiet ticks (no demand, no arrivals, no orders) from gaps or missing log entries during replay.*
 # MAGIC

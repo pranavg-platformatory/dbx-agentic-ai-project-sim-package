@@ -1,6 +1,6 @@
 <h1>Reasoning Integration Development Approach - 1</h1>
 
-***LAWO - Implementation Approach***
+***LLMAgentWrapper - Implementation Approach***
 
 > **Context**:
 > 
@@ -19,7 +19,7 @@
   - [`warehouse_sim/agent/rule_based.py` - Now needed](#warehouse_simagentrule_basedpy---now-needed)
   - [`warehouse_sim/data_store/` - New table: `hist_eval_metrics`](#warehouse_simdata_store---new-table-hist_eval_metrics)
 - [2. External Elements and Systems](#2-external-elements-and-systems)
-  - [LAWO Config (`LAWOConfig`)](#lawo-config-lawoconfig)
+  - [LLMAgentWrapper Config (`LLMAgentWrapperConfig`)](#llm_agent_wrapper-config-llm_agent_wrapperconfig)
   - [In-Process Queue](#in-process-queue)
   - [Async Executor and Shared Result Slot](#async-executor-and-shared-result-slot)
   - [MLflow - Run-level parameter logging](#mlflow---run-level-parameter-logging)
@@ -35,24 +35,24 @@
 
 ## Untouched
 
-The core simulation - everything built in Stages 1 through 7 - is not modified. The engine, data models, event logger, pattern sampler, and visualisation layer remain as-is. The agent contract (`BaseAgent`, `AgentContext`, `ReorderDecision` in `agent/base.py`) is the defined boundary; the LAWO sits outside it.
+The core simulation - everything built in Stages 1 through 7 - is not modified. The engine, data models, event logger, pattern sampler, and visualisation layer remain as-is. The agent contract (`BaseAgent`, `AgentContext`, `ReorderDecision` in `agent/base.py`) is the defined boundary; the LLMAgentWrapper sits outside it.
 
 ## `warehouse_sim/agent/` - New files added
 
-This sub-package already exists with `base.py`, `hold_agent.py`, and `reorder_agent.py`. The LAWO is added here as a new concrete `BaseAgent` subclass:
+This sub-package already exists with `base.py`, `hold_agent.py`, and `reorder_agent.py`. The LLMAgentWrapper is added here as a new concrete `BaseAgent` subclass:
 
 ```
 warehouse_sim/agent/
 ├── base.py            (unchanged)
 ├── hold_agent.py      (unchanged)
 ├── reorder_agent.py   (unchanged)
-├── lawo.py            <- NEW: LLMAgentWrapper(BaseAgent)
-└── lawo_config.py     <- NEW: LAWOConfig (Pydantic model for LAWO parameters)
+├── llm_agent_wrapper.py            <- NEW: LLMAgentWrapper(BaseAgent)
+└── llm_agent_wrapper_config.py     <- NEW: LLMAgentWrapperConfig (Pydantic model for LLMAgentWrapper parameters)
 ```
 
-`LLMAgentWrapper` implements `decide(context: AgentContext) -> list[ReorderDecision]` - the same contract as any other agent. From the runner's perspective, the LAWO is just another `BaseAgent`. The runner is never aware of the monitoring loop, queue, executor thread, or LLM call inside it.
+`LLMAgentWrapper` implements `decide(context: AgentContext) -> list[ReorderDecision]` - the same contract as any other agent. From the runner's perspective, the LLMAgentWrapper is just another `BaseAgent`. The runner is never aware of the monitoring loop, queue, executor thread, or LLM call inside it.
 
-> **Based on comparison with spec (see: `reasoningIntegration-3-1`)**: UC read tool definitions (`ops_warehouse_state`, `hist_demand_actuals`, `ops_pending_orders`, `ops_cost_accumulator`, `ops_active_disruptions`) are Her Majesty Reshma the Boss's scope and are not included here. However, this is an explicit dependency: the LAWO cannot be tested with a real LLM until those UC read tools exist. This should be tracked as a handoff point between the stub phase and the live LLM phase.
+> **Based on comparison with spec (see: `reasoningIntegration-3-1`)**: UC read tool definitions (`ops_warehouse_state`, `hist_demand_actuals`, `ops_pending_orders`, `ops_cost_accumulator`, `ops_active_disruptions`) are Her Majesty Reshma the Boss's scope and are not included here. However, this is an explicit dependency: the LLMAgentWrapper cannot be tested with a real LLM until those UC read tools exist. This should be tracked as a handoff point between the stub phase and the live LLM phase.
 
 ## `warehouse_sim/engine/runner.py` - One targeted change
 
@@ -68,11 +68,11 @@ except Exception as e:
     ...
 ```
 
-This is a **narrow, targeted change** - a single try/except block around one call site, with a defined fallback (log event, substitute hold decisions for all items). It does not touch tick sequencing, state writes, or any other runner logic. The LAWO's own internal validation still sits *before* this - the runner's wrap is the last-resort safety net, as per the design.
+This is a **narrow, targeted change** - a single try/except block around one call site, with a defined fallback (log event, substitute hold decisions for all items). It does not touch tick sequencing, state writes, or any other runner logic. The LLMAgentWrapper's own internal validation still sits *before* this - the runner's wrap is the last-resort safety net, as per the design.
 
 ## `warehouse_sim/agent/rule_based.py` - Now needed
 
-The `RuleBasedAgent` was deferred at Stage 6. It is now a dependency: the LAWO's fallback path (for both `FALLBACK_STRUCTURAL` and `FALLBACK_LOGICAL` cases) calls a rule-based agent rather than defaulting to hold-all. This needs to be a proper, importable `RuleBasedAgent(BaseAgent)` - not an inline stub - so the fallback path is testable independently of the LAWO.
+The `RuleBasedAgent` was deferred at Stage 6. It is now a dependency: the LLMAgentWrapper's fallback path (for both `FALLBACK_STRUCTURAL` and `FALLBACK_LOGICAL` cases) calls a rule-based agent rather than defaulting to hold-all. This needs to be a proper, importable `RuleBasedAgent(BaseAgent)` - not an inline stub - so the fallback path is testable independently of the LLMAgentWrapper.
 
 **Rule**: reorder when `stock_on_hand < reorder_point`, quantity = `min_order_qty`. This is the minimum viable rule; it must use the shared `PatternSampler` RNG instance if it introduces any stochastic element (reproducibility requirement FR-07).
 
@@ -95,9 +95,9 @@ This table is owned by the monitoring loop (Pranav's scope). Pull consumers - La
 
 # 2. External Elements and Systems
 
-## LAWO Config (`LAWOConfig`)
+## LLMAgentWrapper Config (`LLMAgentWrapperConfig`)
 
-A new Pydantic model holding all LAWO-specific parameters, separate from `SimConfig`. Kept separate because these parameters govern the wrapper's behaviour, not the simulation's behaviour - they must be independently configurable and logged independently.
+A new Pydantic model holding all LLMAgentWrapper-specific parameters, separate from `SimConfig`. Kept separate because these parameters govern the wrapper's behaviour, not the simulation's behaviour - they must be independently configurable and logged independently.
 
 | Parameter | Default | Notes |
 |---|---|---|
@@ -158,16 +158,16 @@ On each call to `decide()`, the sync side:
 
 ## MLflow - Run-level parameter logging
 
-MLflow is used to log LAWO parameters per simulation run. This is called once at run start, not per tick.
+MLflow is used to log LLMAgentWrapper parameters per simulation run. This is called once at run start, not per tick.
 
 Parameters logged:
 
 | Parameter | Source |
 |---|---|
 | `agent_history_window_ticks` | `SimConfig` |
-| `executor_trigger_every_n_ticks` | `LAWOConfig` |
-| `context_obsolescence_threshold_k` | `LAWOConfig` |
-| `queue_size` | `LAWOConfig` |
+| `executor_trigger_every_n_ticks` | `LLMAgentWrapperConfig` |
+| `context_obsolescence_threshold_k` | `LLMAgentWrapperConfig` |
+| `queue_size` | `LLMAgentWrapperConfig` |
 | `agent_version` | `BaseAgent.agent_version()` |
 | `random_seed` | `SimConfig` |
 
@@ -177,7 +177,7 @@ No per-tick MLflow calls at this stage. Per-tick tracing (LangFuse) is Her Majes
 
 ## Event log - Two new event types
 
-The existing `event_log` table gains two new `event_type` values, written by the LAWO:
+The existing `event_log` table gains two new `event_type` values, written by the LLMAgentWrapper:
 
 | Event Type | Fired When | Key Payload Fields |
 |---|---|---|
@@ -186,13 +186,13 @@ The existing `event_log` table gains two new `event_type` values, written by the
 
 Both cases result in rule-based decisions being substituted. Both are logged before decisions reach the runner, so `_validate_decisions` never sees an invalid response.
 
-> **Based on comparison with spec (see: `reasoningIntegration-3-1`)**: The spec's KEY POINT 1 calls for UC functions to handle Delta table writes, moving the implementation closer to PROD level. The LAWO's async boundary (background thread → shared result slot) is structurally analogous to the PROD decoupled-process pattern, but UC write function definitions are not part of this implementation phase. This is the natural next PROD-facing step once UC read tools are in place and the stub phase is complete.
+> **Based on comparison with spec (see: `reasoningIntegration-3-1`)**: The spec's KEY POINT 1 calls for UC functions to handle Delta table writes, moving the implementation closer to PROD level. The LLMAgentWrapper's async boundary (background thread → shared result slot) is structurally analogous to the PROD decoupled-process pattern, but UC write function definitions are not part of this implementation phase. This is the natural next PROD-facing step once UC read tools are in place and the stub phase is complete.
 
 ---
 
 # 3. Expected Flow - Stub Agent Phase
 
-The stub phase replaces the LLM call with a `StubLLMAgent` that returns predictable, valid decisions. This allows the full LAWO machinery - monitoring loop, queue, executor thread, shared result slot, obsolescence check, fallback path, MLflow logging, `hist_eval_metrics` writes - to be tested end-to-end before Her Majesty Reshma the Boss's LLM integration is ready.
+The stub phase replaces the LLM call with a `StubLLMAgent` that returns predictable, valid decisions. This allows the full LLMAgentWrapper machinery - monitoring loop, queue, executor thread, shared result slot, obsolescence check, fallback path, MLflow logging, `hist_eval_metrics` writes - to be tested end-to-end before Her Majesty Reshma the Boss's LLM integration is ready.
 
 ## Structural overview
 
@@ -247,7 +247,7 @@ LLMAgentWrapper.decide(context)          <- sync, called every tick
 
 ## The stub agent
 
-`StubLLMAgent` is not a `BaseAgent` subclass - it lives inside the LAWO, standing in for the HTTP call to the LLM. It should cover at minimum three cases, each exercising a different code path:
+`StubLLMAgent` is not a `BaseAgent` subclass - it lives inside the LLMAgentWrapper, standing in for the HTTP call to the LLM. It should cover at minimum three cases, each exercising a different code path:
 
 | Stub mode | What it returns | Code path exercised |
 |---|---|---|
@@ -255,11 +255,11 @@ LLMAgentWrapper.decide(context)          <- sync, called every tick
 | `structural_fail` | Malformed / unparseable response | `FALLBACK_STRUCTURAL` → `RuleBasedAgent` |
 | `logical_fail` | Parsed but with invalid quantities or budget violation | `FALLBACK_LOGICAL` → `RuleBasedAgent` |
 
-Stub mode is a parameter in `LAWOConfig`. All three modes must be tested before the stub is retired.
+Stub mode is a parameter in `LLMAgentWrapperConfig`. All three modes must be tested before the stub is retired.
 
 ## What this phase validates end-to-end
 
-- The LAWO satisfies the `BaseAgent` contract and the runner runs without modification (beyond the resilience wrap)
+- The LLMAgentWrapper satisfies the `BaseAgent` contract and the runner runs without modification (beyond the resilience wrap)
 - The monitoring loop assembles and queues `QueueMessage` objects every tick
 - The executor thread is dispatched on the correct ticks per `executor_trigger_every_n_ticks` and only when not already busy
 - `_result_slot` is consumed correctly on the tick after the executor completes, updating `_last_committed`

@@ -356,7 +356,7 @@ class SimRunner:
         - Without a try/except here, any unhandled exception from either call halts the simulation entirely with no recovery
         
         NOTE:
-        - The LAWO's internal pre-flight validation (structural + logical checks) is the primary defence
+        - The LLMAgentWrapper's internal pre-flight validation (structural + logical checks) is the primary defence
         - It intercepts invalid responses before they reach this point and substitutes RuleBasedAgent decisions
         - This try/except is therefore a last-resort safety net, not the main fallback mechanism.
         

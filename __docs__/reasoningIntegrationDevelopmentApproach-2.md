@@ -1,12 +1,12 @@
 <h1>Reasoning Integration Development Approach - 2</h1>
 
-***LAWO Implementation Approach - Spec Compliance***
+***LLMAgentWrapper Implementation Approach - Spec Compliance***
 
 > **Spec sources**:
 >
 > - [`reasoningIntegrationSpecs-2.md`](./reasoningIntegrationSpecs-2.md) - decision-making points 1–9, overall solution structure, key points
 > - [`reasoningIntegrationSpecs-3.md`](./reasoningIntegrationSpecs-3.md) - sharpening and missing items
-> - [`reasoningIntegrationSpecs-4.md`](./reasoningIntegrationSpecs-4.md) - LAWO design and resolved concerns
+> - [`reasoningIntegrationSpecs-4.md`](./reasoningIntegrationSpecs-4.md) - LLMAgentWrapper design and resolved concerns
 >
 > **Implementation**: [`reasoningIntegrationDevelopmentApproach-1.md`](./reasoningIntegrationDevelopmentApproach-1.md)
 
@@ -28,7 +28,7 @@ The spec requires the engine to handle structurally invalid responses, logically
 
 **Decision point 1 - Trigger condition as a configurable parameter**
 
-`executor_trigger_every_n_ticks` is a named field in `LAWOConfig`, separate from `SimConfig`, and is one of the six parameters logged to MLflow at run start.
+`executor_trigger_every_n_ticks` is a named field in `LLMAgentWrapperConfig`, separate from `SimConfig`, and is one of the six parameters logged to MLflow at run start.
 
 **Decision point 2 - Trigger mode and async/sync split**
 
@@ -36,7 +36,7 @@ The implementation correctly separates the tick-synchronous monitoring loop from
 
 **Decision point 3 - Resilience measures**
 
-Defined at two layers: the LAWO's pre-flight validation (structural + logical) with `RuleBasedAgent` fallback, and the runner's `try/except` as a safety net. The open question from `reasoningIntegration-2-3` (whether `_run_tick` has a try/except) is resolved by adding one.
+Defined at two layers: the LLMAgentWrapper's pre-flight validation (structural + logical) with `RuleBasedAgent` fallback, and the runner's `try/except` as a safety net. The open question from `reasoningIntegration-2-3` (whether `_run_tick` has a try/except) is resolved by adding one.
 
 **Decision point 6 - Push targets and pull consumers**
 
@@ -50,19 +50,19 @@ Addressed via the `context_obsolescence_threshold_k` parameter: a context assemb
 
 The shared result slot (`_result_slot`, `_executor_busy`, `_last_committed`) is the defined IPC mechanism. Monitoring pushes to the queue; the executor reads from a snapshot of it and writes back to the slot. The two sides share no other state.
 
-**LAWO design - Queue message schema**
+**LLMAgentWrapper design - Queue message schema**
 
 `QueueMessage` is fully defined with all required fields: `trigger_tick`, `trigger_condition_met`, `assembly_timestamp`, `obsolescence_threshold`, `context`, `sim_id`. `sim_id` and `context.tick` are explicitly included for Her Majesty Reshma the Boss's LangFuse trace attachment.
 
-**LAWO design - Obsolescence condition**
+**LLMAgentWrapper design - Obsolescence condition**
 
 Defined as tick-elapsed only (`current_tick - assembly_tick > K`). Disruption-based obsolescence explicitly excluded for now, as resolved. Default K tied to minimum lead time.
 
-**LAWO design - Queue drain policy**
+**LLMAgentWrapper design - Queue drain policy**
 
 Drain logic runs in full regardless of `queue_size` - not short-circuited for the default of 1. Consumes to the latest non-outdated message.
 
-**LAWO design - "Agent busy" policy**
+**LLMAgentWrapper design - "Agent busy" policy**
 
 On trigger: if executor busy, skip dispatch and return `_last_committed`. When result arrives, consume on the next tick's sync check before any new dispatch.
 
@@ -80,7 +80,7 @@ The background thread boundary is a direct analogue of the PROD decoupled-proces
 
 **Decision point 4 - Tool abstraction layer (UC functions)**
 
-The implementation approach does not define UC read functions. These are Her Majesty Reshma the Boss's scope (UC read tools for `AgentContext` assembly: `ops_warehouse_state`, `hist_demand_actuals`, `ops_pending_orders`, `ops_cost_accumulator`, `ops_active_disruptions`). The implementation approach correctly defers this but does not note the dependency explicitly: the LAWO cannot be tested with a real LLM until these tools exist.
+The implementation approach does not define UC read functions. These are Her Majesty Reshma the Boss's scope (UC read tools for `AgentContext` assembly: `ops_warehouse_state`, `hist_demand_actuals`, `ops_pending_orders`, `ops_cost_accumulator`, `ops_active_disruptions`). The implementation approach correctly defers this but does not note the dependency explicitly: the LLMAgentWrapper cannot be tested with a real LLM until these tools exist.
 
 **KEY POINT 1 - Working toward PROD via UC functions**
 
@@ -92,7 +92,7 @@ Structurally the implementation moves in this direction (thread boundary as proc
 
 **Decision point 5 - Trigger condition as a governable UC artefact**
 
-Explicitly deferred in the LAWO design doc. Acceptable for simulation scope; `LAWOConfig` is the placeholder.
+Explicitly deferred in the LLMAgentWrapper design doc. Acceptable for simulation scope; `LLMAgentWrapperConfig` is the placeholder.
 
 **Decision point 7 - Lakebase / shared state for context enrichment**
 

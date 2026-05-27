@@ -43,6 +43,7 @@
     - [Stage 7 - MLflow integration](#stage-7---mlflow-integration)
   - [Completion Status](#completion-status-1)
 - [Full LLM Agent Integration](#full-llm-agent-integration)
+  - [Import Strategy: Databricks Workspace Path](#import-strategy-databricks-workspace-path)
   - [Integration Points with Her Majesty Reshma the Boss's Package](#integration-points-with-her-majesty-reshma-the-bosss-package)
   - [`ops_escalation_queue`: LLM Agent Escalation Table](#ops_escalation_queue-llm-agent-escalation-table)
     - [Origin](#origin)
@@ -575,6 +576,25 @@ LLMAgentWrapper:
 ```
 
 # Full LLM Agent Integration
+## Import Strategy: Databricks Workspace Path
+
+**File changed**: [`warehouse_sim/agent/llm_agent_wrapper.py`](./warehouse_sim/agent/llm_agent_wrapper.py) (see `[DEP-5]` in module docstring)
+
+The original intention was to vendor Her Majesty Reshma the Boss's LLM agent codebase as an internal sub-package within this repository, defining it as a proper Python package with relative imports and making it self-contained from the simulation's perspective. This was abandoned.
+
+The reason is straightforward: Her Majesty Reshma the Boss's codebase already uses `/Workspace/Shared/reorder-llm-agent` as its working path consistently across every notebook (`01_test_skeleton`, `02_test_llm_loop`, `03_mlflow_tracing`, `04_driver`), the `LLMAgentWrapperConfig` already uses `sys.path.insert(0, '/Workspace/Shared/reorder-llm-agent')` in `[DEP-5]`. Replicating that setup as a vendored internal package would require restructuring her imports, adjusting `config.yml` resolution (which uses `Path(__file__).resolve().parent`), and keeping two copies of the code in sync. None of that buys anything.
+
+**What the integration actually does**: `LLMAgentWrapper.__init__` performs a lazy import of `LLMReorderAgent` from `llm_agent` - a bare module name that resolves correctly once `/Workspace/Shared/reorder-llm-agent` is on `sys.path`. The caller (notebook or job) is responsible for the `sys.path.insert` before constructing `LLMAgentWrapper` with `stub_mode=None`. A clear `ImportError` with an explicit fix message is raised if the path has not been set up. The one exception is `agent_model.py` (Her Majesty Reshma the Boss's MLflow serving wrapper), which uses `_THIS_DIR` instead - correct for the serving container context where the files are co-located, not a `sys.path` concern for this package.
+
+**Practical consequence**: before constructing `LLMAgentWrapper` with `stub_mode=None` in any notebook or job, add:
+
+```python
+import sys
+sys.path.insert(0, '/Workspace/Shared/reorder-llm-agent')
+```
+
+This is already present in every notebook in Her Majesty Reshma the Boss's codebase and needs to be added to the simulation driver notebook when the full integration is run for the first time.
+
 ## Integration Points with Her Majesty Reshma the Boss's Package
 
 When the two packages were reviewed together, four integration points were identified where the independently-developed components needed to be reconciled before the full system could run. Points 1 and 3 are addressed here. Point 2 was found to be a non-issue on close reading (Her Majesty Reshma the Boss's `_parse_llm_decisions` clamps out-of-range quantities before constructing `ReorderDecision` objects, so by the time `_validate_logical` sees the list, quantities are already within bounds). Point 4 is deferred.

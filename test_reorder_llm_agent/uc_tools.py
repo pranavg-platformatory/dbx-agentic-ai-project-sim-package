@@ -206,6 +206,30 @@ def get_active_disruptions(sim_id: str, item_id: str) -> str:
         f'sim_id={sim_id} item_id={item_id}.'
     )
 
+# uc_tools.py - add this tool
+@tool
+def get_full_context(sim_id: str, item_id: str, history_ticks: int = 10) -> str:
+    '''
+    Single-call context assembly for one item. Returns inventory, supplier,
+    costs, demand summary, pending orders, and disruption summary in one row.
+    Call this first for each item before making a reorder decision. Only call
+    individual tools if you need more detail than this provides.
+
+    Args:
+        sim_id:        The simulation run identifier
+        item_id:       The item type identifier
+        history_ticks: Number of demand history ticks to summarise (default 10)
+
+    Returns:
+        JSON string with full context for the item
+    '''
+    spark = _get_spark()
+    df = spark.sql(f'''
+        SELECT * FROM hackathon_of_the_century.agent_tools.get_full_context(
+            '{sim_id}', '{item_id}', {history_ticks}
+        )
+    ''')
+    return _df_to_json_str(df)
 
 # ---------------------------------------------------------------------------
 # Write tools
@@ -287,33 +311,7 @@ def escalate_item(
     return f'escalated: {item_id} reason={reason} tick={tick}'
 
 
-# uc_tools.py - add this tool
-@tool
-def get_full_context(sim_id: str, item_id: str, history_ticks: int = 10) -> str:
-    '''
-    Single-call context assembly for one item. Returns inventory, supplier,
-    costs, demand summary, pending orders, and disruption summary in one row.
-    Call this first for each item before making a reorder decision. Only call
-    individual tools if you need more detail than this provides.
-
-    Args:
-        sim_id:        The simulation run identifier
-        item_id:       The item type identifier
-        history_ticks: Number of demand history ticks to summarise (default 10)
-
-    Returns:
-        JSON string with full context for the item
-    '''
-    spark = _get_spark()
-    df = spark.sql(f'''
-        SELECT * FROM hackathon_of_the_century.agent_tools.get_full_context(
-            '{sim_id}', '{item_id}', {history_ticks}
-        )
-    ''')
-    return _df_to_json_str(df)
-
-
-    # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # Tool registry - exported for use in llm_agent.py
 # ---------------------------------------------------------------------------
 

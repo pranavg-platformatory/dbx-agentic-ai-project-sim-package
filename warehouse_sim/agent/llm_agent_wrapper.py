@@ -276,14 +276,14 @@ class LLMAgentWrapper(BaseAgent):
             # - With the tool absent from the bound list, the LLM will either skip it or produce a tool-not-found message that is handled by tools_node without halting the loop
             # - The reasoning and decision still flow through correctly
             # ------------------------------------------------------------------
-            _WRITE_TOOL_NAMES = {"log_agent_decision", "escalate_item"}
+            _WRITE_TOOL_NAMES_TO_EXCLUDE = {"log_agent_decision"}
 
             if config.suppress_write_tools:
                 import uc_tools as _uc_tools
                 _original_tools   = _uc_tools.ALL_TOOLS
                 _uc_tools.ALL_TOOLS = [
                     t for t in _original_tools
-                    if t.name not in _WRITE_TOOL_NAMES
+                    if t.name not in _WRITE_TOOL_NAMES_TO_EXCLUDE
                 ]
 
             try:

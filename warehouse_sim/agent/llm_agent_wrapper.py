@@ -93,27 +93,32 @@ _LLMReorderAgentClass = None  # resolved at first instantiation with stub_mode=N
 _CATALOG            = "hackathon_of_the_century"
 _EVAL_METRICS_TABLE = f"{_CATALOG}.tables4hist.hist_eval_metrics"
 
-# FIX: StructType used here instead of a DDL string schema
-# ("sim_id STRING, tick INT, item_id STRING, ...").
+# FIX: NOT NULL contraint violation for item_id in tables4hist.hist_eval_metrics
 #
 # Root cause:
 # - Spark's string DDL parser marks every column NOT NULL by default
-# - The hist_eval_metrics Delta table correctly declares item_id as nullable (no NOT NULL in setup4dataStore.py), but createDataFrame was enforcing non-nullability at the Spark level before the data even reached the table
+# - The hist_eval_metrics Delta table declares item_id as nullable (no NOT NULL in setup4dataStore.py), but there are 2 issues here:
+#   - createDataFrame was enforcing non-nullability at the Spark level before the data even reached the table
+#   - item_id is part of the primary key of hist_eval_metrics, which means it cannot be set as nullable
 # - The run-level metric row (budget_utilisation) has item_id=None by design - NULL is the signal that a metric is run-level rather than item-level
 # - This produced a NOT NULL constraint violation on every tick
 # 
 # Resolution:
-# - StructType with nullable=True on item_id matches the actual table DDL and allows NULL to pass through createDataFrame correctly
-# - All other columns are nullable=False, consistent with their NOT NULL declarations in the DDL
+# - createDataFrame side:
+#   - StructType with nullable=True on item_id matches the actual table DDL and allows NULL to pass through createDataFrame correctly
+#   - All other columns are nullable=False, consistent with their NOT NULL declarations in the DDL
+#   - NOTE: This will only be effective if item_id is removed as a child column in the primary key in the future
+# - Sentinel value (actual fix, considering that item_id is part of the primary key) (implemented in _write_eval_metrics):
+#   - If item_id is None, ensure it becomes a string
+#   - Still, the above string should indicate that the metric is run-level, not item-level
 _EVAL_METRICS_SCHEMA = StructType([
     StructField("sim_id",       StringType(),    nullable=False),
     StructField("tick",         IntegerType(),   nullable=False),
-    StructField("item_id",      StringType(),    nullable=True),   # NULL for run-level metrics
+    StructField("item_id",      StringType(),    nullable=True),
     StructField("metric_name",  StringType(),    nullable=False),
     StructField("metric_value", DoubleType(),    nullable=False),
     StructField("logged_at",    TimestampType(), nullable=False),
 ])
-
 
 # ---------------------------------------------------------------------------
 # LLMAgentWrapper
@@ -773,6 +778,11 @@ class LLMAgentWrapper(BaseAgent):
         # -- Item-level metrics (one row per metric per item) --------------
 
         for item_id, item_state in context.item_states.items():
+
+            # FIX (part of FIX: NOT NULL contraint violation for item_id in tables4hist.hist_eval_metrics: 
+            # Adding a sentinel value (to avoid a NOT NULL constraint violation)
+            if item_id is None:
+                item_id = "__run_level__"
 
             # TODO: replace stub values with computed metrics
             # NOTE: Stub values of 0.0 are placeholders that keep the write pipeline exercisable before metric logic is finalised.

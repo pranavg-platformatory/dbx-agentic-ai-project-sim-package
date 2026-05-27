@@ -799,7 +799,7 @@
 # MAGIC
 # MAGIC  sim_id STRING NOT NULL COMMENT 'Foreign key to env_sim_config.sim_id. Identifies the simulation run.',
 # MAGIC  tick INT NOT NULL COMMENT 'Simulation tick at which this metric was evaluated by the LLMAgentWrapper monitoring loop.',
-# MAGIC  item_id STRING COMMENT 'Foreign key to env_item_types.item_id. NULL for run-level metrics; populated for item-level metrics.',
+# MAGIC  item_id STRING COMMENT 'Foreign key to env_item_types.item_id. NULL for run-level metrics; populated for item-level metrics.', -- Will automatically be constrained by NOT NULL as it is part of the primary key
 # MAGIC  metric_name STRING NOT NULL COMMENT 'Metric identifier. Examples: stockout_rate, holding_cost_delta, unmet_demand_pct. One row per metric per tick; add new metrics as new rows without altering this schema.',
 # MAGIC  metric_value DOUBLE NOT NULL COMMENT 'Computed value of the metric for this tick and item (or run level if item_id is NULL). All metrics are numeric; non-numeric evaluation outputs warrant a separate design decision.',
 # MAGIC  logged_at TIMESTAMP NOT NULL COMMENT 'Wall-clock timestamp at which this row was written by the LLMAgentWrapper monitoring loop. Not a simulation time - use tick for simulation-time ordering.',

@@ -93,7 +93,7 @@ _LLMReorderAgentClass = None  # resolved at first instantiation with stub_mode=N
 _CATALOG            = "hackathon_of_the_century"
 _EVAL_METRICS_TABLE = f"{_CATALOG}.tables4hist.hist_eval_metrics"
 
-# FIX: NOT NULL contraint violation for item_id in tables4hist.hist_eval_metrics
+# FIX: NOT NULL constraint violation for item_id in tables4hist.hist_eval_metrics
 #
 # Root cause:
 # - Spark's string DDL parser marks every column NOT NULL by default
@@ -779,7 +779,7 @@ class LLMAgentWrapper(BaseAgent):
 
         for item_id, item_state in context.item_states.items():
 
-            # FIX (part of FIX: NOT NULL contraint violation for item_id in tables4hist.hist_eval_metrics: 
+            # FIX (part of FIX: NOT NULL constraint violation for item_id in tables4hist.hist_eval_metrics: 
             # Adding a sentinel value (to avoid a NOT NULL constraint violation)
             if item_id is None:
                 item_id = "__run_level__"

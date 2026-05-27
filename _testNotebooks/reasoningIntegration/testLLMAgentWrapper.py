@@ -1,5 +1,4 @@
 # Databricks notebook source
-
 # MAGIC %md
 # MAGIC # LLMAgentWrapper - Functional Tests
 # MAGIC
@@ -28,6 +27,21 @@
 
 # MAGIC %md
 # MAGIC ## Setup
+
+# COMMAND ----------
+
+# MAGIC %pip install pydantic numpy matplotlib pandas
+# MAGIC %restart_python
+
+# COMMAND ----------
+
+import sys
+
+PACKAGE_ROOT = "/Workspace/Repos/mistermilvusmigrans@gmail.com/dbx-agentic-ai-project-sim-package"
+if PACKAGE_ROOT not in sys.path:
+    sys.path.insert(0, PACKAGE_ROOT)
+
+print("Python path updated.")
 
 # COMMAND ----------
 
@@ -245,7 +259,7 @@ with warnings.catch_warnings(record=True) as caught:
     user_warnings = [w for w in caught if issubclass(w.category, UserWarning)]
     _record("T2c", "context_obsolescence_threshold_k=None => UserWarning emitted",
         len(user_warnings) > 0,
-        f"warnings caught: {len(user_warnings)}")
+        f"warnings caught: {len(user_warnings)}: {[user_warning.message for user_warning in user_warnings]}")
 
 # 2d: context_obsolescence_threshold_k=0 => ValidationError (ge=1)
 try:

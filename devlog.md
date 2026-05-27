@@ -48,6 +48,8 @@
   - [How it is written](#how-it-is-written)
   - [Key design point: not append-only](#key-design-point-not-append-only)
   - [What needed updating in this package](#what-needed-updating-in-this-package)
+- [`agent_tools` Schema: LLM Agent UC Functions](#agent_tools-schema-llm-agent-uc-functions)
+  - [What it is](#what-it-is-1)
  
 ---
 
@@ -574,7 +576,7 @@ LLMAgentWrapper:
 
 ## Origin
 
-`ops_escalation_queue` was introduced by Her Majesty Reshma the Boss in her LLM agent package (`dbx-agentic-ai-project-test-llm-reorder-agent-package`), defined in `notebooks/UC_Functions.py`. It was not part of the original simulation specification. It is documented here because it lives in the simulation's catalog (`hackathon_of_the_century.tables4ops`) and is a defined part of the interface between the two packages.
+`ops_escalation_queue` was introduced by the LLM agent (for viewing the test codebase for this agent, see: [`test_reorder_llm_agent`](./test_reorder_llm_agent/)), defined in [`test_reorder_llm_agent/notebooks/UC_Functions.py`](./test_reorder_llm_agent/notebooks/UC_Functions.py). It was not part of the original simulation specification. It is documented here because it lives in the simulation's catalog (`hackathon_of_the_century.tables4ops`) and is a defined part of the interface between the two packages.
 
 ## What it is
 
@@ -589,7 +591,7 @@ In all cases the agent still returns a HOLD decision for the affected item via `
 
 ## How it is written
 
-The table is written exclusively by the `LLMReorderAgent` (Her Majesty Reshma the Boss's package) via the `escalate_item` UC function (`hackathon_of_the_century.agent_tools.escalate_item`). That function validates the escalation reason and builds the row; the caller tool in `uc_tools.py` performs `INSERT INTO ops_escalation_queue SELECT * FROM escalate_item(...)`. The simulation engine, the `LLMAgentWrapper`, and all rule-based agents have no awareness of this table and never write to it.
+The table is written exclusively by the `LLMReorderAgent` via the `escalate_item` UC function (`hackathon_of_the_century.agent_tools.escalate_item`). That function validates the escalation reason and builds the row; the caller tool in `uc_tools.py` performs `INSERT INTO ops_escalation_queue SELECT * FROM escalate_item(...)`. The simulation engine, the `LLMAgentWrapper`, and all rule-based agents have no awareness of this table and never write to it.
 
 ## Key design point: not append-only
 
@@ -598,3 +600,15 @@ Unlike every other operational table in `tables4ops`, `ops_escalation_queue` is 
 ## What needed updating in this package
 
 The table DDL (`CREATE TABLE IF NOT EXISTS`) has been added to `setup4dataStore.py` in the `tables4ops` section, with full column comments and a detailed `%md` cell explaining origin, purpose, and write ownership. The `agent_tools` schema (`hackathon_of_the_century.agent_tools`) has also been added to the catalog-level schema creation block, with a comment clarifying that its contents (UC functions and the registered model) are populated by Her Majesty Reshma the Boss's package, not by this one.
+
+# `agent_tools` Schema: LLM Agent UC Functions
+
+**Files updated**:
+- [`_dataStoreDefinition/setup4dataStore.py`](./_dataStoreDefinition/setup4dataStore.py) — `create schema if not exists agent_tools` added to catalog-level schema creation block
+- [`_dataStoreDefinition/README.md`](./_dataStoreDefinition/README.md) — new `agent_tools` schema section added
+
+## What it is
+
+`hackathon_of_the_century.agent_tools` is the schema owned by e LLM agent (for viewing the test codebase for this agent, see: [`test_reorder_llm_agent`](./test_reorder_llm_agent/)). It holds the nine UC functions the `LLMReorderAgent` uses as LangChain tools, plus the registered MLflow model. Its contents are populated via [`test_reorder_llm_agent/notebooks/UC_Functions.py`](./test_reorder_llm_agent//notebooks/UC_Functions.py).
+
+It is declared in `setup4dataStore.py` so that running the setup notebook creates the full catalog layout in one shot, without requiring the agent package's notebook to be run first just to get the schema. The simulation engine has no dependency on anything inside this schema.

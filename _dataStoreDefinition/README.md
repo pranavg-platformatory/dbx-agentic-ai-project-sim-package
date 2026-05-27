@@ -13,6 +13,7 @@
 - [Schema: `tables4ops` - Operational Tables](#schema-tables4ops---operational-tables)
 - [Schema: `tables4hist` - Historical Tables](#schema-tables4hist---historical-tables)
 - [Schema: `tables4eventlog` - Event Log](#schema-tables4eventlog---event-log)
+- [Schema: `agent_tools` - LLM Agent UC Functions and Tables](#schema-agent_tools---llm-agent-uc-functions-and-tables)
 - [Event Types (quick reference)](#event-types-quick-reference)
 
 ---
@@ -44,6 +45,7 @@ Live state during the simulation. Read and written by the engine each tick.
 | `ops_pending_orders` | Record of every reorder placed by the agent. Rows are inserted at order placement and updated to reflect final status (`pending` -> `arrived` / `partially_lost` / `fully_lost`) when the order is processed on its arrival tick. |
 | `ops_cost_accumulator` | Append-only running cost totals per item per tick. Tracks cumulative holding, stockout, order, and transit loss costs, plus overall remaining budget. Current totals = row with `MAX(tick)` per `(sim_id, item_id)`. |
 | `ops_active_disruptions` | Append-only record of every disruption's activation state each tick. All disruptions within their scheduled window appear here every tick; `is_active_this_tick` distinguishes those that had a real effect (always true for deterministic disruptions; RNG-determined for stochastic ones). |
+| `ops_escalation_queue` | Human-review queue written by the LLM agent (not the simulation engine) when it encounters a situation it cannot resolve autonomously: budget breach, imminent stockout, or missing supplier info. The agent makes a concurrent HOLD decision so the simulation continues normally. Rows have a mutable `status` field (`OPEN` / `REVIEWED`) updated by human operators. Written exclusively via the `escalate_item` UC function in the `agent_tools` schema. |
 
 ---
 
@@ -67,6 +69,25 @@ Append-only summaries that accumulate across ticks. Used for agent context and o
 | Table | Description |
 |---|---|
 | `event_log` | Unified, append-only, immutable event stream. Every state-changing action in the simulation writes a row here, tagged by `event_type`, `tick`, `item_id`, and a JSON `payload`. `TICK_STARTED` / `TICK_ENDED` events bookend every tick, making quiet ticks distinguishable from log gaps. Supports 16 event types spanning simulation lifecycle, demand, supply, reorders, disruptions, costs, and budget alerts. Source of truth for replay and audit. |
+
+---
+
+# Schema: `agent_tools` - LLM Agent UC Functions and Tables
+
+This schema is **not part of the simulation engine**. It is owned and populated by the LLM agent (the test codebase for this agent is stored in the directory [`test_reorder_llm_agent`](../test_reorder_llm_agent/)), specifically via [`test_reorder_llm_agent/notebooks/UC_Functions.py`](../test_reorder_llm_agent/notebooks/UC_Functions.py). It is documented here because its tables interact with the simulation's data store and the full catalog layout should be visible in one place.
+
+| Object | Type | Description |
+|---|---|---|
+| `get_inventory_state` | UC function | Returns the latest `ops_warehouse_state` row for one item. Used by the LLM agent to verify current stock before deciding. |
+| `get_demand_history` | UC function | Returns the last N ticks of `hist_demand_actuals` for one item, plus a rolling 7-tick average. |
+| `get_pending_orders` | UC function | Returns all `pending`-status rows from `ops_pending_orders` for one item. |
+| `get_supplier_info` | UC function | Returns `env_suppliers` joined to `env_supplier_item_map` for one item. |
+| `get_cost_snapshot` | UC function | Returns the latest `ops_cost_accumulator` row for one item. |
+| `get_active_disruptions` | UC function | Returns active rows from `ops_active_disruptions` joined to `env_disruption_schedule` (adds `start_tick`/`end_tick`). |
+| `get_full_context` | UC function | Single-call join of all six read functions above, returning one summary row per item. The agent calls this first before using individual tools. |
+| `log_agent_decision` | UC function | Builds and validates a `hist_reorder_decisions` row. The caller (`log_agent_decision` tool in `uc_tools.py`) performs `INSERT INTO hist_reorder_decisions SELECT * FROM this_function(...)`. |
+| `escalate_item` | UC function | Builds and validates an `ops_escalation_queue` row. The caller performs `INSERT INTO ops_escalation_queue SELECT * FROM this_function(...)`. |
+| `llm_reorder_agent` | Registered model | The LLM agent registered in Unity Catalog as an MLflow PyFunc model, deployable to Model Serving. |
 
 ---
 

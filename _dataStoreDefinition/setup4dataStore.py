@@ -530,7 +530,7 @@
 # MAGIC %md
 # MAGIC ## `ops_escalation_queue`
 # MAGIC
-# MAGIC **Origin**: Introduced by Her Majesty Reshma the Boss's LLM agent package (`dbx-agentic-ai-project-test-llm-reorder-agent-package`), defined in `notebooks/UC_Functions.py`.
+# MAGIC **Origin**: Introduced by the LLM agent (the test codebase for this agent is stored in the directory `test_reorder_llm_agent`), defined in `test_reorder_llm_agent/notebooks/UC_Functions.py`.
 # MAGIC
 # MAGIC Human-review queue written by the LLM agent when it encounters a situation it cannot resolve autonomously. The agent makes a HOLD decision for the item and simultaneously escalates it here, so that a human operator can act on the flagged situation without the simulation halting.
 # MAGIC

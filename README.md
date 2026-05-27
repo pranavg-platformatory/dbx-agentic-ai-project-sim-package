@@ -2,10 +2,7 @@
 
 *Warehouse simulation package for the Databricks agentic AI project.*
 
-> **Key Related Repositories**:
-> 
-> - **Ideation & Planning**: [`pranavg-platformatory`/`dbx-agentic-ai-project`, **github.com**](https://github.com/pranavg-platformatory/dbx-agentic-ai-project)
-> - **Test LLM Reorder Agent Package**: [`pranavg-platformatory`/`dbx-agentic-ai-project-test-llm-reorder-agent-package`, **github.com**](https://github.com/pranavg-platformatory/dbx-agentic-ai-project-test-llm-reorder-agent-package)
+> **Ideation & Planning Repository**: [`pranavg-platformatory`/`dbx-agentic-ai-project`, **github.com**](https://github.com/pranavg-platformatory/dbx-agentic-ai-project)
 
 ---
 
@@ -21,6 +18,7 @@
 | **Resource** | `Link` |
 | --- | --- |
 | Warehouse simulation package | [`warehouse_sim`](./warehouse_sim/) |
+| Test Reorder LLM Agent | [`test_reorder_llm_agent`](./test_reorder_llm_agent/) |
 | Devlog | [`devlog.md`](./devlog.md) |
 | Data store definition | [`_dataStoreDefinition`](./_dataStoreDefinition/) |
 | Test notebooks | [`_testNotebooks`](./_testNotebooks/) |

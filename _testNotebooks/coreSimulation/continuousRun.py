@@ -202,12 +202,12 @@ print("✓ SimWorld written for continuous run")
 from warehouse_sim.agent.base import AgentContext, BaseAgent, ReorderDecision
 
 class ContinuousReorderAgent(BaseAgent):
-    """
+    '''
     Reorder when stock_on_hand + stock_in_transit falls below
     2 × reorder_point. Orders up to max_order_qty.
     This is a slightly more defensive policy than the Stage 4 agent,
     appropriate for infinite runs where stockouts compound over time.
-    """
+    '''
     def decide(self, context: AgentContext) -> list[ReorderDecision]:
         decisions = []
         for item_id in context.items():
@@ -303,12 +303,12 @@ runner.run()
 
 # COMMAND ----------
 
-display(spark.sql(f"""
+display(spark.sql(f'''
     SELECT MAX(tick) AS ticks_completed,
            COUNT(DISTINCT item_id) AS items
     FROM {CATALOG}.tables4ops.ops_warehouse_state
     WHERE sim_id = '{SIM_ID}'
-"""))
+'''))
 
 # COMMAND ----------
 
@@ -316,7 +316,7 @@ display(spark.sql(f"""
 
 # COMMAND ----------
 
-display(spark.sql(f"""
+display(spark.sql(f'''
     SELECT tick, item_id, stock_on_hand, stock_in_transit
     FROM {CATALOG}.tables4ops.ops_warehouse_state
     WHERE sim_id = '{SIM_ID}'
@@ -326,7 +326,7 @@ display(spark.sql(f"""
           WHERE sim_id = '{SIM_ID}'
       )
     ORDER BY tick, item_id
-"""))
+'''))
 
 # COMMAND ----------
 
@@ -334,7 +334,7 @@ display(spark.sql(f"""
 
 # COMMAND ----------
 
-display(spark.sql(f"""
+display(spark.sql(f'''
     SELECT disruption_id, disruption_type, item_id,
            COUNT(*) AS ticks_in_window,
            SUM(CAST(is_active_this_tick AS INT)) AS ticks_active,
@@ -343,7 +343,7 @@ display(spark.sql(f"""
     WHERE sim_id = '{SIM_ID}'
     GROUP BY disruption_id, disruption_type, item_id
     ORDER BY disruption_id
-"""))
+'''))
 
 # COMMAND ----------
 
@@ -351,7 +351,7 @@ display(spark.sql(f"""
 
 # COMMAND ----------
 
-display(spark.sql(f"""
+display(spark.sql(f'''
     SELECT item_id,
            MAX_BY(cumulative_holding_cost,      tick) AS holding,
            MAX_BY(cumulative_stockout_cost,     tick) AS stockout,
@@ -362,7 +362,7 @@ display(spark.sql(f"""
     WHERE sim_id = '{SIM_ID}'
     GROUP BY item_id
     ORDER BY item_id
-"""))
+'''))
 
 # COMMAND ----------
 
@@ -370,13 +370,13 @@ display(spark.sql(f"""
 
 # COMMAND ----------
 
-display(spark.sql(f"""
+display(spark.sql(f'''
     SELECT event_type, COUNT(*) AS count
     FROM {CATALOG}.tables4eventlog.event_log
     WHERE sim_id = '{SIM_ID}'
     GROUP BY event_type
     ORDER BY count DESC
-"""))
+'''))
 
 # COMMAND ----------
 # MAGIC %md

@@ -1,4 +1,4 @@
-<h1>DEVLOG</h1>
+<h1>Devlog</h1>
 
 ---
 

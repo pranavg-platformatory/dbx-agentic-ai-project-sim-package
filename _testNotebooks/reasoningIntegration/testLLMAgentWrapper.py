@@ -118,7 +118,7 @@ _ITEM_STATES = {
 }
 
 def _make_context(tick: int = 1, sim_id: str = "test_sim_001") -> AgentContext:
-    """Build a minimal AgentContext from the shared item states."""
+    '''Build a minimal AgentContext from the shared item states.'''
     return AgentContext(
         sim_id             = sim_id,
         tick               = tick,
@@ -143,10 +143,10 @@ def _make_context(tick: int = 1, sim_id: str = "test_sim_001") -> AgentContext:
 
 
 def _make_mock_world(min_lead_time: int = 3) -> MagicMock:
-    """
+    '''
     Minimal SimWorld mock. Supplies two suppliers with base_lead_time_ticks
     of min_lead_time and min_lead_time + 2 so the minimum is predictable.
-    """
+    '''
     supplier_a       = MagicMock()
     supplier_a.base_lead_time_ticks = min_lead_time
 
@@ -161,11 +161,11 @@ def _make_mock_world(min_lead_time: int = 3) -> MagicMock:
 
 
 def _make_llm_agent_wrapper(stub_mode: Optional[str], n_ticks: int = 9999) -> LLMAgentWrapper:
-    """
+    '''
     Construct a LLMAgentWrapper with a mock world and Spark session.
     executor_trigger_every_n_ticks defaults to 9999 so the executor never
     fires unless the test explicitly sets a lower value.
-    """
+    '''
     config = LLMAgentWrapperConfig(
         executor_trigger_every_n_ticks  = n_ticks,
         context_obsolescence_threshold_k = 3,
@@ -179,7 +179,7 @@ def _make_llm_agent_wrapper(stub_mode: Optional[str], n_ticks: int = 9999) -> LL
 
 
 def _make_queue_message(tick: int, k: int = 3) -> QueueMessage:
-    """Build a QueueMessage for the given tick."""
+    '''Build a QueueMessage for the given tick.'''
     return QueueMessage(
         trigger_tick           = tick,
         trigger_condition_met  = True,
@@ -717,7 +717,7 @@ _ITEM_STATES = {
 }
 
 def _make_context(tick: int = 1, sim_id: str = "test_sim_001") -> AgentContext:
-    """Build a minimal AgentContext from the shared item states."""
+    '''Build a minimal AgentContext from the shared item states.'''
     return AgentContext(
         sim_id             = sim_id,
         tick               = tick,
@@ -742,10 +742,10 @@ def _make_context(tick: int = 1, sim_id: str = "test_sim_001") -> AgentContext:
 
 
 def _make_mock_world(min_lead_time: int = 3) -> MagicMock:
-    """
+    '''
     Minimal SimWorld mock. Supplies two suppliers with base_lead_time_ticks
     of min_lead_time and min_lead_time + 2 so the minimum is predictable.
-    """
+    '''
     supplier_a       = MagicMock()
     supplier_a.base_lead_time_ticks = min_lead_time
 
@@ -760,11 +760,11 @@ def _make_mock_world(min_lead_time: int = 3) -> MagicMock:
 
 
 def _make_llm_agent_wrapper(stub_mode: Optional[str], n_ticks: int = 9999) -> LLMAgentWrapper:
-    """
+    '''
     Construct a LLMAgentWrapper with a mock world and Spark session.
     executor_trigger_every_n_ticks defaults to 9999 so the executor never
     fires unless the test explicitly sets a lower value.
-    """
+    '''
     config = LLMAgentWrapperConfig(
         executor_trigger_every_n_ticks  = n_ticks,
         context_obsolescence_threshold_k = 3,
@@ -778,7 +778,7 @@ def _make_llm_agent_wrapper(stub_mode: Optional[str], n_ticks: int = 9999) -> LL
 
 
 def _make_queue_message(tick: int, k: int = 3) -> QueueMessage:
-    """Build a QueueMessage for the given tick."""
+    '''Build a QueueMessage for the given tick.'''
     return QueueMessage(
         trigger_tick           = tick,
         trigger_condition_met  = True,
@@ -1261,14 +1261,14 @@ _CONSUMER_ITEM_MAP = {"item_a": "con_001", "item_b": "con_001"}
 
 
 def _make_demand_patterns(sim_id: str) -> dict:
-    """
+    '''
     One Poisson demand pattern per item, keyed by item_id.
     SimWorld.demand_patterns is dict[str, Pattern] - one entry per item.
 
     pattern_id is a stable deterministic string (not a uuid) so that
     re-running the setup cell does not create duplicate pattern rows
     with different IDs in the env tables.
-    """
+    '''
     return {
         "item_a": Pattern(
             pattern_id   = f"{sim_id}__item_a__demand",
@@ -1292,7 +1292,7 @@ def _make_demand_patterns(sim_id: str) -> dict:
 
 
 def _make_test_sim_config(sim_id: str) -> SimConfig:
-    """
+    '''
     Build a SimConfig for the given sim_id.
     All test runs share the same world definition and random seed - only
     sim_id differs. This is what makes T8 a valid reproducibility test:
@@ -1303,7 +1303,7 @@ def _make_test_sim_config(sim_id: str) -> SimConfig:
 
     num_ticks=10: short enough for fast Spark test runs; long enough for
     the executor to fire at least once at executor_trigger_every_n_ticks=5.
-    """
+    '''
     return SimConfig(
         sim_id                     = sim_id,
         random_seed                = 42,
@@ -1319,10 +1319,10 @@ def _make_test_sim_config(sim_id: str) -> SimConfig:
 
 
 def _write_test_world(sim_id: str) -> None:
-    """
+    '''
     Assemble a SimWorld for sim_id and write it to the env tables.
     write_world is idempotent with respect to re-runs (IF NOT EXISTS semantics).
-    """
+    '''
     config = _make_test_sim_config(sim_id)
     world  = SimWorld(
         config            = config,
@@ -1391,24 +1391,24 @@ _record("T7a", "Runner completes without propagating agent exception",
 
 if run_completed:
     # Check AGENT_ERROR events in event_log
-    error_events = spark.sql(f"""
+    error_events = spark.sql(f'''
         SELECT COUNT(*) AS n
         FROM hackathon_of_the_century.tables4eventlog.event_log
         WHERE sim_id = '{SIM_ID_RESILIENCE}'
           AND event_type = 'AGENT_ERROR'
-    """).collect()[0]["n"]
+    ''').collect()[0]["n"]
 
     _record("T7b", "AGENT_ERROR event logged for every tick",
         error_events == world.config.num_ticks,
         f"AGENT_ERROR events={error_events}, expected={world.config.num_ticks}")
 
     # Check hold-all decisions in hist_reorder_decisions
-    non_hold = spark.sql(f"""
+    non_hold = spark.sql(f'''
         SELECT COUNT(*) AS n
         FROM hackathon_of_the_century.tables4hist.hist_reorder_decisions
         WHERE sim_id = '{SIM_ID_RESILIENCE}'
           AND order_qty > 0
-    """).collect()[0]["n"]
+    ''').collect()[0]["n"]
 
     _record("T7c", "All decisions are hold (order_qty=0) when agent always raises",
         non_hold == 0,
@@ -1465,19 +1465,19 @@ _record("T8a", "Both runs complete without error", runs_ok)
 if runs_ok:
     # Compare hist_reorder_decisions (item_id, tick, order_qty) across both runs.
     # sim_id is excluded from the comparison intentionally.
-    decisions_a = spark.sql(f"""
+    decisions_a = spark.sql(f'''
         SELECT tick, item_id, order_qty
         FROM hackathon_of_the_century.tables4hist.hist_reorder_decisions
         WHERE sim_id = '{SIM_ID_REPRO_A}'
         ORDER BY tick, item_id
-    """).collect()
+    ''').collect()
 
-    decisions_b = spark.sql(f"""
+    decisions_b = spark.sql(f'''
         SELECT tick, item_id, order_qty
         FROM hackathon_of_the_century.tables4hist.hist_reorder_decisions
         WHERE sim_id = '{SIM_ID_REPRO_B}'
         ORDER BY tick, item_id
-    """).collect()
+    ''').collect()
 
     rows_match = decisions_a == decisions_b
     _record("T8b", "hist_reorder_decisions identical across both runs",

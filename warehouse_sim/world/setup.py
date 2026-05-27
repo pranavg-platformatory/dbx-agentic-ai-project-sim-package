@@ -59,7 +59,7 @@ def _t(name: str) -> str:
 #   - Inferring long instead of int
 #   - Missing nullability on arrays
 #   - Ambiguous boolean/double types
-# - The same class of issues were seen in the Stage 1 notebook (_testNotebooks/stage1-testAndInspect.py in this repo) when using `createDataFrame` without a schema.
+# - The same class of issues were seen in the Stage 1 notebook (_testNotebooks/coreSimulation/stage1-testAndInspect.py in this repo) when using `createDataFrame` without a schema.
 # ---------------------------------------------------------------------------
 
 # REFERENCE: _dataStoreDefinition in this repo

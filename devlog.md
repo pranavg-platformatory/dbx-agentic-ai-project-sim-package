@@ -576,6 +576,7 @@ LLMAgentWrapper:
 ```
 
 # Full LLM Agent Integration
+
 ## Import Strategy: Databricks Workspace Path
 
 **File changed**: [`warehouse_sim/agent/llm_agent_wrapper.py`](./warehouse_sim/agent/llm_agent_wrapper.py) (see `[DEP-5]` in module docstring)

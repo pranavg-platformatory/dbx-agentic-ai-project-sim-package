@@ -240,11 +240,12 @@ class LLMAgentWrapper(BaseAgent):
         # - See [DEP-5] in the module docstring for path requirements
         # ------------------------------------------------------------------
         if config.stub_mode is None:
+            import sys
+            sys.path.insert(0, '/Workspace/Shared/reorder-llm-agent')
+
             global _LLMReorderAgentClass
             if _LLMReorderAgentClass is None:
                 try:
-                    import sys
-                    sys.path.insert(0, '/Workspace/Shared/reorder-llm-agent')
                     from llm_agent import LLMReorderAgent as _LLMReorderAgentClass
                 except ImportError as e:
                     raise ImportError(

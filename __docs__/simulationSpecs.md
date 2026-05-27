@@ -545,7 +545,7 @@ Disruptions currently in effect at the current tick.
 
 > **Origin**: Introduced by Her Majesty Reshma the Boss's LLM agent codebase [`test_reorder_llm_agent`](../test_reorder_llm_agent/). Not part of the original simulation specification. Added to this spec as a record of the interface boundary between the autonomous agent layer and the human operations layer.
 
-Human-review queue written by the LLM agent when it encounters a situation it cannot resolve autonomously. This table is **not written by the simulation engine or the rule-based agent** — it is written exclusively by the `LLMReorderAgent` via the `escalate_item` UC function (`hackathon_of_the_century.agent_tools.escalate_item`).
+Human-review queue written by the LLM agent when it encounters a situation it cannot resolve autonomously. This table is **not written by the simulation engine or the rule-based agent** - it is written exclusively by the `LLMReorderAgent` via the `escalate_item` UC function (`hackathon_of_the_century.agent_tools.escalate_item`).
 
 When escalating, the agent simultaneously returns a HOLD decision for the affected item via `decide()`, so the simulation tick completes normally. The escalation is a side-channel notification, not a halt.
 

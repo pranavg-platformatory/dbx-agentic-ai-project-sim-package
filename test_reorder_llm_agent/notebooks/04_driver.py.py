@@ -4,7 +4,7 @@
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC # Task 5 — Driver: Log → Evaluate → Register → Deploy
+# MAGIC # Task 5 - Driver: Log → Evaluate → Register → Deploy
 # MAGIC
 # MAGIC Follows the Investment Assistant driver.py pattern exactly.
 # MAGIC
@@ -18,7 +18,7 @@
 
 # COMMAND ----------
 
-# Cell 1 — install dependencies
+# Cell 1 - install dependencies
 
 %pip install databricks-langchain langgraph langchain-core mlflow databricks-agents
 
@@ -28,7 +28,7 @@ dbutils.library.restartPython()
 
 # COMMAND ----------
 
-# Cell 2 — imports and setup
+# Cell 2 - imports and setup
 
 import sys
 import os
@@ -75,15 +75,15 @@ print(f'UC model       : {UC_MODEL_NAME}')
 
 # # COMMAND ----------
 # # MAGIC %md
-# # MAGIC ## Step 1 — Log the agent as an MLflow model
+# # MAGIC ## Step 1 - Log the agent as an MLflow model
 
 # # COMMAND ----------
-# # Cell 3 — define the agent as a PyFunc model wrapper for MLflow logging
+# # Cell 3 - define the agent as a PyFunc model wrapper for MLflow logging
 # #
 # # MLflow needs a pyfunc model to log and serve the agent.
 # # The wrapper translates the MLflow predict() interface
 # # (which receives a DataFrame or dict) into AgentContext
-# # and calls agent.decide() — keeping the agent code unchanged.
+# # and calls agent.decide() - keeping the agent code unchanged.
 
 # import pandas as pd
 # import json
@@ -195,7 +195,7 @@ print(f'UC model       : {UC_MODEL_NAME}')
 # COMMAND ----------
 
 # DBTITLE 1,Cell 5
-# Cell 4 — log the agent using code-based logging (MLflow 3.x)
+# Cell 4 - log the agent using code-based logging (MLflow 3.x)
 
 import json
 import shutil
@@ -284,17 +284,17 @@ print(f'  model_uri : {logged_model_uri}')
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Step 2 — Build evaluation dataset
+# MAGIC ## Step 2 - Build evaluation dataset
 
 # COMMAND ----------
 
-# Cell 5 — define evaluation scenarios
+# Cell 5 - define evaluation scenarios
 #
 # Four representative scenarios covering the key decision branches:
-# 1. Healthy stock — expect HOLD
-# 2. Imminent stockout — expect REORDER max qty
-# 3. Transit delay disruption — expect REORDER with inflated qty
-# 4. Pending order already covers need — expect HOLD
+# 1. Healthy stock - expect HOLD
+# 2. Imminent stockout - expect REORDER max qty
+# 3. Transit delay disruption - expect REORDER with inflated qty
+# 4. Pending order already covers need - expect HOLD
 
 import json
 
@@ -431,8 +431,8 @@ for s in eval_scenarios:
 
 # COMMAND ----------
 
-# Cell 6 — run agent against each scenario and score
-# Calls LLMReorderAgent directly — no wrapper needed for local eval
+# Cell 6 - run agent against each scenario and score
+# Calls LLMReorderAgent directly - no wrapper needed for local eval
 
 from base import (
     AgentContext, ItemState, PendingOrder,
@@ -560,7 +560,7 @@ print(f'  Pass rate : {pass_rate:.0%}')
 
 # COMMAND ----------
 
-# Cell 7 — log evaluation results to MLflow
+# Cell 7 - log evaluation results to MLflow
 
 with mlflow.start_run(run_id=logged_run_id):
     mlflow.log_metric('eval_pass_rate',   pass_rate)
@@ -584,11 +584,11 @@ display(results_df[['scenario', 'expected_decision', 'actual_decision', 'correct
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Step 4 — Register to Unity Catalog (if evaluation passes)
+# MAGIC ## Step 4 - Register to Unity Catalog (if evaluation passes)
 
 # COMMAND ----------
 
-# Cell 8 — register model to Unity Catalog
+# Cell 8 - register model to Unity Catalog
 #
 # Only proceeds if pass rate >= 75%.
 # Mirrors the Investment Assistant pattern:
@@ -643,7 +643,7 @@ else:
 
 # COMMAND ----------
 
-# Cell 9 — deploy to Model Serving endpoint (Central India workspace)
+# Cell 9 - deploy to Model Serving endpoint (Central India workspace)
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.serving import (
@@ -678,7 +678,7 @@ traffic_config = TrafficConfig(
 existing = None
 try:
     existing = w.serving_endpoints.get(SERVING_ENDPOINT)
-    print(f'Endpoint exists — updating...')
+    print(f'Endpoint exists - updating...')
 except Exception:
     print(f'Creating new endpoint: {SERVING_ENDPOINT}')
 
@@ -712,7 +712,7 @@ print(f'Check: Serving → Endpoints → {SERVING_ENDPOINT}')
 
 # COMMAND ----------
 
-# Cell 10 — verify the registered model in UC
+# Cell 10 - verify the registered model in UC
 
 print('── Registered model in Unity Catalog ──────────────────')
 versions = client.search_model_versions(f"name='{UC_MODEL_NAME}'")

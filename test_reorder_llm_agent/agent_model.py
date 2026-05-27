@@ -19,7 +19,7 @@ import json
 import pandas as pd
 import mlflow
 
-# Path setup — works both in notebook and serving container
+# Path setup - works both in notebook and serving container
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _THIS_DIR not in sys.path:
     sys.path.insert(0, _THIS_DIR)
@@ -32,7 +32,7 @@ class ReorderAgentModel(mlflow.pyfunc.PythonModel):
     predict() accepts a dict payload representing an AgentContext
     and returns a list of ReorderDecision dicts.
 
-    This is the serving interface — the underlying agent code
+    This is the serving interface - the underlying agent code
     is unchanged.
     '''
     
@@ -72,7 +72,7 @@ class ReorderAgentModel(mlflow.pyfunc.PythonModel):
         else:
             payload = model_input
 
-        # Parse fields — all complex fields arrive as JSON strings
+        # Parse fields - all complex fields arrive as JSON strings
         # when called via REST endpoint
         def _parse(val):
             if isinstance(val, str):

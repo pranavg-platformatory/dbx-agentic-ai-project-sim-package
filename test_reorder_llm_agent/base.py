@@ -35,7 +35,7 @@ from typing import Optional
 class ItemState:
     """
     Stock snapshot for one item, as seen by the agent at decision time
-    (end of sub-step 3b — after arrivals and demand depletion).
+    (end of sub-step 3b - after arrivals and demand depletion).
     """
     item_id:                     str
     stock_on_hand:               int   # current units in warehouse (>= 0)

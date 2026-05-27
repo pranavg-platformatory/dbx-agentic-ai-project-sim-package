@@ -1,11 +1,11 @@
-# Warehouse Reorder Agent — policy configuration
+# Warehouse Reorder Agent - policy configuration
 # All agent behaviour is controlled from here, nothing is hardcoded in llm_agent.py
 
 # LLM endpoint name as registered in Databricks Model Serving
 llm_endpoint: "databricks-meta-llama-3-3-70b-instruct"
 
 # Unity Catalog functions the agent may call
-# These will be wired in Task 3 — listed here now so the config is complete
+# These will be wired in Task 3 - listed here now so the config is complete
 uc_functions:
   - "hackathon_of_the_century.agent_tools.get_inventory_state"
   - "hackathon_of_the_century.agent_tools.get_demand_history"
@@ -17,16 +17,16 @@ uc_functions:
   - "hackathon_of_the_century.agent_tools.escalate_item"
   - "hackathon_of_the_century.agent_tools.get_full_context"
 
-# SQL warehouse ID — Databricks workspace → SQL Warehouses → click warehouse → copy ID from URL
+# SQL warehouse ID - Databricks workspace → SQL Warehouses → click warehouse → copy ID from URL
 warehouse_id: "c5029555649d795f"
 
-# Agent version string — stored in hist_reorder_decisions.agent_version
+# Agent version string - stored in hist_reorder_decisions.agent_version
 agent_version: "llm_reorder_agent_v1"
 
 # How many ticks of demand history to include in the prompt per item
 prompt_history_window: 10
 
-# System prompt — the full decision policy the LLM follows
+# System prompt - the full decision policy the LLM follows
 agent_prompt: |
   You are an intelligent warehouse inventory reorder agent.
   You manage stock levels for a simulated warehouse by deciding each tick
@@ -34,7 +34,7 @@ agent_prompt: |
 
   You will receive a snapshot of the current simulation state. For each item:
 
-  STEP 1 — OBSERVE
+  STEP 1 - OBSERVE
   Read the provided state snapshot carefully:
   - stock_on_hand: units currently in the warehouse
   - stock_in_transit: units already ordered and on their way
@@ -46,7 +46,7 @@ agent_prompt: |
     transit delays, or transit losses currently active
   - remaining_budget: global budget left for this simulation run
 
-  STEP 2 — REASON (use tools to fill gaps)
+  STEP 2 - REASON (use tools to fill gaps)
   For each item, start by calling get_full_context to get a complete snapshot in one call. Only call individual tools (get_inventory_state, get_pending_orders, etc.) if you need specific detail not covered by get_full_context.
   Think through each item in order. For each one consider:
   - What is the rolling average demand over the last 7 ticks?
@@ -54,19 +54,19 @@ agent_prompt: |
     Formula: stock_on_hand / rolling_avg_demand
   - Is there already a pending order? If yes, does it arrive in time?
   - Is there an active disruption affecting this item?
-    - demand_spike: demand will be higher — consider ordering more
-    - demand_suppression: demand is lower — holding may be safe
-    - transit_delay: lead time is extended — order earlier than usual
-    - transit_loss: arriving stock may be reduced — adjust expectation
+    - demand_spike: demand will be higher - consider ordering more
+    - demand_suppression: demand is lower - holding may be safe
+    - transit_delay: lead time is extended - order earlier than usual
+    - transit_loss: arriving stock may be reduced - adjust expectation
   - Does a reorder fit within the remaining budget?
 
-  STEP 3 — DECIDE
+  STEP 3 - DECIDE
   For each item make exactly one of two decisions:
   - REORDER: place an order. Choose a quantity between min_order_qty
     and max_order_qty. Justify the specific quantity chosen.
   - HOLD: do not order. Explain why stock is sufficient.
 
-  Escalation rules — if any of the following are true, still make a
+  Escalation rules - if any of the following are true, still make a
   HOLD decision but also call escalate_item:
   - A reorder is needed but would exceed the remaining budget
   - Stockout will occur within 1 tick and no order can arrive in time
@@ -74,7 +74,7 @@ agent_prompt: |
 
   Always call log_agent_decision for every item after deciding.
 
-  STEP 4 — OUTPUT FORMAT
+  STEP 4 - OUTPUT FORMAT
   After reasoning and tool calls are complete, return ONLY a JSON array.
   No preamble, no markdown, no explanation outside the JSON.
   One object per item, in any order:
@@ -100,11 +100,11 @@ agent_prompt: |
   ]
 
   STRICT RULES:
-  - Return exactly one object per item — no more, no fewer
+  - Return exactly one object per item - no more, no fewer
   - order_qty must be 0 when decision is hold
   - order_qty must be between min_order_qty and max_order_qty when reorder
   - confidence must be a float between 0.0 and 1.0
-  - Do not fabricate item_ids — only use the ones provided to you
+  - Do not fabricate item_ids - only use the ones provided to you
 
 
 # MLflow experiment settings
@@ -120,5 +120,5 @@ mlflow_autolog: true
 uc_model_name: "hackathon_of_the_century.agent_tools.llm_reorder_agent"
 
 # Databricks Model Serving endpoint name for the deployed agent
-# This is different from llm_endpoint — this is the agent itself served as API
+# This is different from llm_endpoint - this is the agent itself served as API
 agent_serving_endpoint: "reorder-agent-endpoint"

@@ -779,11 +779,6 @@ class LLMAgentWrapper(BaseAgent):
 
         for item_id, item_state in context.item_states.items():
 
-            # FIX (part of FIX: NOT NULL constraint violation for item_id in tables4hist.hist_eval_metrics: 
-            # Adding a sentinel value (to avoid a NOT NULL constraint violation)
-            if item_id is None:
-                item_id = "__run_level__"
-
             # TODO: replace stub values with computed metrics
             # NOTE: Stub values of 0.0 are placeholders that keep the write pipeline exercisable before metric logic is finalised.
 
@@ -823,12 +818,16 @@ class LLMAgentWrapper(BaseAgent):
 
         # -- Run-level metrics (item_id = None) ----------------------------
 
+        # FIX (part of FIX: NOT NULL constraint violation for item_id in tables4hist.hist_eval_metrics: 
+        # Adding a sentinel value for run-level metrics (to avoid a NOT NULL constraint violation)
+        item_id = "__run_level__"
+
         # budget_utilisation: fraction of budget_limit spent so far.
         # Source: context.remaining_budget, world.config.budget_limit
         rows.append(_metric_row(
             sim_id    = context.sim_id,
             tick      = context.tick,
-            item_id   = None,
+            item_id   = item_id,
             name      = "budget_utilisation",
             value     = 0.0,   # TODO
             logged_at = logged_at,

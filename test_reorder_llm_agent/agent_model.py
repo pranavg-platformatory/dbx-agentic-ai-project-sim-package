@@ -35,9 +35,22 @@ class ReorderAgentModel(mlflow.pyfunc.PythonModel):
     This is the serving interface — the underlying agent code
     is unchanged.
     '''
-
+    
     def load_context(self, context):
         '''Called once when the model is loaded for serving.'''
+        import sys
+
+        # In serving container, artifacts are at context.artifacts['agent_dir']
+        # This is the reliable path regardless of environment
+        agent_dir = context.artifacts.get('agent_dir', '')
+        if agent_dir and agent_dir not in sys.path:
+            sys.path.insert(0, agent_dir)
+
+        # Fallback to __file__ directory for notebook execution
+        this_dir = os.path.dirname(os.path.abspath(__file__))
+        if this_dir not in sys.path:
+            sys.path.insert(0, this_dir)
+
         from llm_agent import LLMReorderAgent
         self.agent = LLMReorderAgent()
 

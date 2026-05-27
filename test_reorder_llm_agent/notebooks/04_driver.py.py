@@ -1,9 +1,10 @@
 # Databricks notebook source
-# Databricks notebook source
+
 
 # COMMAND ----------
+
 # MAGIC %md
-# MAGIC # Task 5 - Driver: Log → Evaluate → Register → Deploy
+# MAGIC # Task 5 — Driver: Log → Evaluate → Register → Deploy
 # MAGIC
 # MAGIC Follows the Investment Assistant driver.py pattern exactly.
 # MAGIC
@@ -16,7 +17,8 @@
 # MAGIC 6. Deploy to Model Serving endpoint
 
 # COMMAND ----------
-# Cell 1 - install dependencies
+
+# Cell 1 — install dependencies
 
 %pip install databricks-langchain langgraph langchain-core mlflow databricks-agents
 
@@ -26,7 +28,7 @@ dbutils.library.restartPython()
 
 # COMMAND ----------
 
-# Cell 2 - imports and setup
+# Cell 2 — imports and setup
 
 import sys
 import os
@@ -35,7 +37,7 @@ import json
 import pandas as pd        # ← add this line
 
 # Clear stale bytecode
-cache_dir = 'test_llm_reorder_agent/__pycache__'
+cache_dir = '/Workspace/Shared/reorder-llm-agent/__pycache__'
 if os.path.exists(cache_dir):
     shutil.rmtree(cache_dir)
 
@@ -57,7 +59,7 @@ from base import (
     ActiveDisruption, CostSnapshot,
 )
 
-EXPERIMENT_NAME  = 'test_llm_reorder_agent/experiments/llm_reorder_agent'
+EXPERIMENT_NAME  = '/Shared/reorder-llm-agent/experiments/llm_reorder_agent'
 UC_MODEL_NAME    = 'hackathon_of_the_century.agent_tools.llm_reorder_agent'
 AGENT_VERSION    = 'llm_reorder_agent_v1'
 
@@ -73,15 +75,15 @@ print(f'UC model       : {UC_MODEL_NAME}')
 
 # # COMMAND ----------
 # # MAGIC %md
-# # MAGIC ## Step 1 - Log the agent as an MLflow model
+# # MAGIC ## Step 1 — Log the agent as an MLflow model
 
 # # COMMAND ----------
-# # Cell 3 - define the agent as a PyFunc model wrapper for MLflow logging
+# # Cell 3 — define the agent as a PyFunc model wrapper for MLflow logging
 # #
 # # MLflow needs a pyfunc model to log and serve the agent.
 # # The wrapper translates the MLflow predict() interface
 # # (which receives a DataFrame or dict) into AgentContext
-# # and calls agent.decide() - keeping the agent code unchanged.
+# # and calls agent.decide() — keeping the agent code unchanged.
 
 # import pandas as pd
 # import json
@@ -193,7 +195,7 @@ print(f'UC model       : {UC_MODEL_NAME}')
 # COMMAND ----------
 
 # DBTITLE 1,Cell 5
-# Cell 4 - log the agent using code-based logging (MLflow 3.x)
+# Cell 4 — log the agent using code-based logging (MLflow 3.x)
 
 import json
 import shutil
@@ -220,7 +222,7 @@ FILES_TO_STAGE = [
 ]
 
 for fname in FILES_TO_STAGE:
-    src = f'test_llm_reorder_agent/{fname}'
+    src = f'/Workspace/Shared/reorder-llm-agent/{fname}'
     dst = f'{STAGING_DIR}/{fname}'
     shutil.copy2(src, dst)
     print(f'  staged: {fname}')
@@ -277,18 +279,22 @@ print(f'  model_uri : {logged_model_uri}')
 
 # COMMAND ----------
 
-# COMMAND ----------
-# MAGIC %md
-# MAGIC ## Step 2 - Build evaluation dataset
+
 
 # COMMAND ----------
-# Cell 5 - define evaluation scenarios
+
+# MAGIC %md
+# MAGIC ## Step 2 — Build evaluation dataset
+
+# COMMAND ----------
+
+# Cell 5 — define evaluation scenarios
 #
 # Four representative scenarios covering the key decision branches:
-# 1. Healthy stock - expect HOLD
-# 2. Imminent stockout - expect REORDER max qty
-# 3. Transit delay disruption - expect REORDER with inflated qty
-# 4. Pending order already covers need - expect HOLD
+# 1. Healthy stock — expect HOLD
+# 2. Imminent stockout — expect REORDER max qty
+# 3. Transit delay disruption — expect REORDER with inflated qty
+# 4. Pending order already covers need — expect HOLD
 
 import json
 
@@ -425,8 +431,8 @@ for s in eval_scenarios:
 
 # COMMAND ----------
 
-# Cell 6 - run agent against each scenario and score
-# Calls LLMReorderAgent directly - no wrapper needed for local eval
+# Cell 6 — run agent against each scenario and score
+# Calls LLMReorderAgent directly — no wrapper needed for local eval
 
 from base import (
     AgentContext, ItemState, PendingOrder,
@@ -550,8 +556,11 @@ print(f'  Pass rate : {pass_rate:.0%}')
 
 # COMMAND ----------
 
+
+
 # COMMAND ----------
-# Cell 7 - log evaluation results to MLflow
+
+# Cell 7 — log evaluation results to MLflow
 
 with mlflow.start_run(run_id=logged_run_id):
     mlflow.log_metric('eval_pass_rate',   pass_rate)
@@ -570,12 +579,16 @@ display(results_df[['scenario', 'expected_decision', 'actual_decision', 'correct
 
 # COMMAND ----------
 
-# COMMAND ----------
-# MAGIC %md
-# MAGIC ## Step 4 - Register to Unity Catalog (if evaluation passes)
+
 
 # COMMAND ----------
-# Cell 8 - register model to Unity Catalog
+
+# MAGIC %md
+# MAGIC ## Step 4 — Register to Unity Catalog (if evaluation passes)
+
+# COMMAND ----------
+
+# Cell 8 — register model to Unity Catalog
 #
 # Only proceeds if pass rate >= 75%.
 # Mirrors the Investment Assistant pattern:
@@ -630,9 +643,7 @@ else:
 
 # COMMAND ----------
 
-# Cell 9 - deploy using Databricks SDK (not agents.deploy())
-# agents.deploy() requires ChatCompletionRequest schema - ours is a
-# custom payload schema, so we use the standard serving endpoint API.
+# Cell 9 — deploy to Model Serving endpoint (Central India workspace)
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.serving import (
@@ -641,63 +652,67 @@ from databricks.sdk.service.serving import (
     TrafficConfig,
     Route,
 )
-import time
 
 SERVING_ENDPOINT = 'reorder-agent-endpoint'
-
 w = WorkspaceClient()
 
-# Check if endpoint already exists
+served_entities = [
+    ServedEntityInput(
+        name                  = 'llm_reorder_agent_v1',
+        entity_name           = UC_MODEL_NAME,
+        entity_version        = str(model_version),
+        workload_size         = 'Small',
+        scale_to_zero_enabled = True,
+    )
+]
+
+traffic_config = TrafficConfig(
+    routes = [
+        Route(
+            served_model_name  = 'llm_reorder_agent_v1',
+            traffic_percentage = 100,
+        )
+    ]
+)
+
 existing = None
 try:
     existing = w.serving_endpoints.get(SERVING_ENDPOINT)
-    print(f'Endpoint {SERVING_ENDPOINT} already exists - updating...')
+    print(f'Endpoint exists — updating...')
 except Exception:
     print(f'Creating new endpoint: {SERVING_ENDPOINT}')
 
-endpoint_config = EndpointCoreConfigInput(
-    served_entities = [
-        ServedEntityInput(
-            name               = 'llm_reorder_agent_v1',
-            entity_name        = UC_MODEL_NAME,
-            entity_version     = str(model_version),
-            workload_size      = 'Small',
-            scale_to_zero_enabled = True,
-        )
-    ],
-    traffic_config = TrafficConfig(
-        routes = [
-            Route(
-                served_model_name    = 'llm_reorder_agent_v1',
-                traffic_percentage   = 100,
-            )
-        ]
-    ),
-)
-
 if existing is None:
-    deployment = w.serving_endpoints.create(
+    w.serving_endpoints.create(
         name   = SERVING_ENDPOINT,
-        config = endpoint_config,
+        config = EndpointCoreConfigInput(
+            served_entities = served_entities,
+            traffic_config  = traffic_config,
+        ),
     )
     print(f'✓ Endpoint creation initiated')
 else:
-    deployment = w.serving_endpoints.update_config(
-        name           = SERVING_ENDPOINT,
-        served_entities = endpoint_config.served_entities,
-        traffic_config  = endpoint_config.traffic_config,
+    # update_config takes served_entities and traffic_config separately
+    w.serving_endpoints.update_config(
+        name            = SERVING_ENDPOINT,
+        served_entities = served_entities,
+        traffic_config  = traffic_config,
     )
     print(f'✓ Endpoint update initiated')
 
 print(f'  endpoint : {SERVING_ENDPOINT}')
+print(f'  model    : {UC_MODEL_NAME} version {model_version}')
 print()
-print('Note: endpoint takes 5-10 minutes to become READY.')
-print(f'Check at: Serving → Endpoints → {SERVING_ENDPOINT}')
+print('Endpoint takes 5-10 minutes to become READY.')
+print(f'Check: Serving → Endpoints → {SERVING_ENDPOINT}')
 
 # COMMAND ----------
 
+
+
 # COMMAND ----------
-# Cell 10 - verify the registered model in UC
+
+# Cell 10 — verify the registered model in UC
 
 print('── Registered model in Unity Catalog ──────────────────')
 versions = client.search_model_versions(f"name='{UC_MODEL_NAME}'")
@@ -705,8 +720,14 @@ for v in versions:
     print(f'  version : {v.version}')
     print(f'  status  : {v.status}')
     print(f'  run_id  : {v.run_id}')
-    for k, val in v.tags.items():
-        print(f'  tag [{k}]: {val}')
+    # tags is a dict in some SDK versions, callable in others
+    # handle both safely
+    try:
+        tags = v.tags if isinstance(v.tags, dict) else {}
+        for k, val in tags.items():
+            print(f'  tag [{k}]: {val}')
+    except Exception:
+        pass
     print()
 
 print(f'✓ Task 5 complete')

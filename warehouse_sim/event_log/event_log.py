@@ -35,7 +35,7 @@ from __future__ import annotations
 import json
 import uuid
 from datetime import datetime, timezone
-from typing import Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from pyspark.sql import SparkSession
@@ -219,6 +219,31 @@ class EventLogger:
             entity_id  = entity_id,
         )
         self._write(row)
+    
+    # ------------------------------------------------------------------
+    # Generic error logging for runner resilience wrap
+    # ------------------------------------------------------------------
+ 
+    def agent_error(
+        self,
+        tick:     int,
+        exc_type: str,
+        exc_msg:  str,
+    ) -> None:
+        '''
+        [DEP-1] in warehouse_sim/engine/runner.py; called by the runner's resilience wrap when `agent.decide()` raises an unhandled exception.
+        
+        NOTE: The simulation continues after this is logged; hold-all decisions are substituted by the runner.
+        '''
+        self._emit(
+            tick       = tick,
+            event_type = "AGENT_ERROR",
+            payload    = {
+                "exc_type": exc_type,
+                "exc_msg":  exc_msg,
+            },
+        )
+
 
     # ------------------------------------------------------------------
     # Simulation lifecycle
@@ -471,8 +496,8 @@ class EventLogger:
         self,
         tick:        int,
         queue_size:  int,
-        oldest_tick: int,
-        newest_tick: int,
+        oldest_tick: Optional[int],
+        newest_tick: Optional[int],
     ) -> None:
         self._emit(
             tick       = tick,

@@ -8,7 +8,8 @@ NOTE: For documentation on stages, see __docs__/reasoningIntegrationDevelopmentA
 Extends Stage 5 (monitoring loop) with the async executor half:
 - Shared result slot (`_result_slot`, `_executor_busy`, `_last_committed`)
 - Trigger condition check and executor thread dispatch (queue snapshot on dispatch)
-- Executor thread: drain logic, StubLLMAgent call, pre-flight validation, fallback routing, ExecutorResult write to slot
+- Executor thread: drain logic, LLMReorderAgent call (or StubLLMAgent for testing),
+  pre-flight validation, fallback routing, ExecutorResult write to slot
 - Slot consumption on the sync side at the top of each `decide()` call
 - StubLLMAgent with three modes (`valid`, `structural_fail`, `logical_fail`)
 
@@ -17,6 +18,14 @@ Stage 5 summary (monitoring loop - unchanged):
 - Push to the in-process queue (collections.deque, capped at queue_size)
 - Write evaluation metrics to hist_eval_metrics
 - Return _last_committed (hold-all until the executor produces a result)
+
+---
+
+LLMReorderAgent integration (stub_mode=None path):
+- LLMReorderAgent (Her Majesty Reshma the Boss's package) is instantiated once in __init__
+- In _run_executor, its decide(context) is called in place of the former NotImplementedError
+- decide() returns list[ReorderDecision] directly; _validate_structural accepts this as-is
+- LLMAgentWrapper remains the agent the runner knows about; LLMReorderAgent is an internal detail
 
 ---
 
@@ -46,6 +55,12 @@ DEPENDENCY FLAGS:
     (b) Write metrics via a side-channel outside `decide()`
 - Option (a) is consistent with the runner's own pattern (spark injected at construction) and keeps decide() side-effect-free with respect to its caller
 - The SparkSession is stored as `self._spark`
+
+[DEP-5] LLMReorderAgent package on the Python path:
+- LLMReorderAgent is imported at the top of this module from `llm_reorder_agent.llm_agent`
+- The LLM agent codebase (test_reorder_llm_agent) must be on sys.path before LLMAgentWrapper is instantiated
+- In a Databricks notebook this is typically: sys.path.insert(0, '/Workspace/Shared/reorder-llm-agent')
+- LLMReorderAgent is only instantiated when stub_mode=None; an ImportError here will surface at __init__ time, not at _run_executor time, making it fail-fast and easy to diagnose
 '''
 
 from __future__ import annotations
@@ -64,6 +79,9 @@ from .rule_based_agent import RuleBasedAgent
 
 if TYPE_CHECKING:
     from pyspark.sql import SparkSession
+
+# NOTE: LLMReorderAgent is imported lazily inside __init__ (only when stub_mode=None) so that the module can be imported and stub-mode tests run without the LLM agent package being on the path (see [DEP-5] in the module docstring).
+_LLMReorderAgentClass = None  # resolved at first instantiation with stub_mode=None
 
 
 # ---------------------------------------------------------------------------
@@ -91,8 +109,13 @@ class LLMAgentWrapper(BaseAgent):
     - Executor thread
     - LLM call inside
 
+    KEY POINTS:
+    - The real LLM call is made by LLMReorderAgent (Her Majesty Reshma the Boss's codebase)
+    - LLMReorderAgent nstantiated once in `__init__` and called inside `_run_executor`
+    - LLMAgentWrapper remains the sole agent the runner interacts with; LLMReorderAgent is an internal detail
+
     NOTE (with respect to development approach as documented in __docs__/reasoningIntegrationDevelopmentApproach-3.md):
-    - Stage implements the monitoring loop only
+    - Stage 5 implements the monitoring loop only
     - The executor half is added in Stage 6 in the clearly marked `# STAGE 6` block inside `decide()`
 
     ---
@@ -206,6 +229,73 @@ class LLMAgentWrapper(BaseAgent):
         - Used by the executor when the LLM response is structurally or logically invalid
         - Instantiated here (not in the executor thread) so it is shared and not re-created per invocation
         '''
+
+        # ------------------------------------------------------------------
+        # LLMReorderAgent - the real LLM call (stub_mode=None only)
+        #
+        # - Instantiated here rather than in _run_executor so:
+        #   (a) Import and initialisation failures (missing package, bad config.yml, LLM endpoint unreachable at startup) surface immediately at construction time, not silently inside the background thread on the first trigger tick
+        #   (b) The object is shared across all executor invocations without being re-created each time (LLMReorderAgent.__init__ builds the LangGraph graph and binds tools, which is non-trivial)
+        # - When stub_mode is not None, this is None and never called
+        # - See [DEP-5] in the module docstring for path requirements
+        # ------------------------------------------------------------------
+        if config.stub_mode is None:
+            global _LLMReorderAgentClass
+            if _LLMReorderAgentClass is None:
+                try:
+                    import sys
+                    sys.path.insert(0, '/Workspace/Shared/reorder-llm-agent')
+                    from llm_agent import LLMReorderAgent as _LLMReorderAgentClass
+                except ImportError as e:
+                    raise ImportError(
+                        "LLMReorderAgent could not be imported. "
+                        "Ensure the LLM agent package is on sys.path before constructing "
+                        "LLMAgentWrapper with stub_mode=None. "
+                        "Typically: sys.path.insert(0, '/Workspace/Shared/reorder-llm-agent'). "
+                        f"Original error: {e}"
+                    ) from e
+
+            # ------------------------------------------------------------------
+            # Write-tool suppression (to address point 3 - duplicate hist_reorder_decisions writes (see "Integration Points with Her Majesty Reshma the Boss's Package" in devlog.md))
+            #
+            # LLMReorderAgent's tool list (uc_tools.ALL_TOOLS) includes log_agent_decision and escalate_item. When running inside the simulation:
+            # - log_agent_decision writes to hist_reorder_decisions...
+            #   - The runner's _write_decision_row() also writes to hist_reorder_decisions for every decision
+            #   - Both write rows with the same (sim_id, tick, item_id) PK
+            #   - Because the table is append-only (delta.appendOnly=true), Delta does not enforce the PK constraint on write - duplicate rows accumulate silently
+            # - escalate_item writes to ops_escalation_queue...
+            #   - The runner has no awareness of this table and does not read from it, so its writes are not duplicated
+            #   - However, suppressing it here is consistent: inside the simulation the runner owns all table writes that affect the sim state, and the escalation queue is a production-facing concern that does not need to be populated during testing
+            #
+            # Resolution:
+            # - Temporarily replace ALL_TOOLS with a filtered list before LLMReorderAgent.__init__ calls _build_agent_graph() (which reads ALL_TOOLS at construction time). The original list is restored immediately after
+            # - This is safe because __init__ is called from the main thread before any executor threads are running, so there is no concurrency risk on the module-level list
+            #
+            # NOTE:
+            # - The LLM's system prompt still instructs it to call log_agent_decision
+            # - With the tool absent from the bound list, the LLM will either skip it or produce a tool-not-found message that is handled by tools_node without halting the loop
+            # - The reasoning and decision still flow through correctly
+            # ------------------------------------------------------------------
+            _WRITE_TOOL_NAMES = {"log_agent_decision", "escalate_item"}
+
+            if config.suppress_write_tools:
+                import uc_tools as _uc_tools
+                _original_tools   = _uc_tools.ALL_TOOLS
+                _uc_tools.ALL_TOOLS = [
+                    t for t in _original_tools
+                    if t.name not in _WRITE_TOOL_NAMES
+                ]
+
+            try:
+                self._llm_agent = _LLMReorderAgentClass(
+                    config_override=config.llm_agent_config_override,
+                )
+            finally:
+                if config.suppress_write_tools:
+                    _uc_tools.ALL_TOOLS = _original_tools  # always restore, even on error
+
+        else:
+            self._llm_agent = None  # stub path; _run_executor uses _StubLLMAgent instead
 
     # ------------------------------------------------------------------
     # BaseAgent contract
@@ -425,17 +515,55 @@ class LLMAgentWrapper(BaseAgent):
 
         # Step 2: LLM call (or StubLLMAgent for testing)
         #
-        # NOTE: Use of stug agent:
-        # - _StubLLMAgent.respond() stands in for the HTTP call to the real LLM
-        # - stub_mode=None means a real LLM call should be made
-        # - _StubLLMAgent is not used in that path (placeholder comment for future)
-        # - Pre-flight validation below is unchanged regardless of source
-        if self._config.stub_mode is not None:
-            stub = _StubLLMAgent(self._config.stub_mode)
-            raw_response = stub.respond(context)
-        else:
-            # FUTURE: replace with real LLM HTTP call and response parsing.
-            raise NotImplementedError("Real LLM call not yet implemented.")
+        # Two paths, selected by stub_mode in LLMAgentWrapperConfig:
+        #
+        # stub_mode is not None → _StubLLMAgent.respond() stands in for the LLM call.
+        #   Returns list[ReorderDecision] directly (valid/logical_fail modes) or a raw
+        #   string (structural_fail mode). Pre-flight validation below runs in both cases.
+        #
+        # stub_mode is None → self._llm_agent.decide(context) calls LLMReorderAgent.
+        #   LLMReorderAgent runs the full LangGraph loop (LLM call + tool calls) and
+        #   returns list[ReorderDecision]. Its internal _parse_llm_decisions already
+        #   clamps out-of-range quantities and fills missing items with HOLD, so the
+        #   list it returns is always structurally valid. _validate_structural will
+        #   accept it as-is; _validate_logical is still run as a safety net.
+        #
+        # NOTE: _run_executor is the ONLY place the LLM call happens. LLMAgentWrapper
+        # remains the agent the runner knows about. LLMReorderAgent is an internal detail.
+        try:
+            if self._config.stub_mode is not None:
+                stub = _StubLLMAgent(self._config.stub_mode)
+                raw_response = stub.respond(context)
+            else:
+                # Real LLM call via LLMReorderAgent (Her Majesty Reshma the Boss's package).
+                # decide() returns list[ReorderDecision] directly - the same type _validate_structural
+                # already accepts from the stub's valid/logical_fail modes.
+                raw_response = self._llm_agent.decide(context)
+
+        except Exception as e:
+            # Any exception from the LLM call (network failure, LangGraph error, etc.)
+            # is caught here so the executor thread can still write a fallback result to
+            # _result_slot and clear _executor_busy. Without this, an unhandled exception
+            # would leave _executor_busy=True permanently, silently stopping all future
+            # executor dispatches for the rest of the simulation run.
+            #
+            # This also addresses the known gap documented in the devlog:
+            # "No finally block in _run_executor - if NotImplementedError is raised
+            # (stub_mode=None), _executor_busy is never cleared."
+            self._logger.fallback_structural(
+                tick         = current_tick,
+                raw_response = "",
+                error        = f"LLM call raised exception: {type(e).__name__}: {e}",
+            )
+            with self._slot_lock:
+                self._result_slot = ExecutorResult(
+                    decisions        = self._fallback_agent.decide(context),
+                    produced_at_tick = chosen.trigger_tick,
+                    fallback_used    = True,
+                    fallback_type    = "FALLBACK_STRUCTURAL",
+                )
+                self._executor_busy = False
+            return
 
         # Step 3: Structural validation
         #

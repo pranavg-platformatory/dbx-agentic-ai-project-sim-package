@@ -42,14 +42,21 @@
     - [Stage 6 - `LLMAgentWrapper`: executor thread and shared result slot](#stage-6---llmagentwrapper-executor-thread-and-shared-result-slot)
     - [Stage 7 - MLflow integration](#stage-7---mlflow-integration)
   - [Completion Status](#completion-status-1)
-- [`ops_escalation_queue`: LLM Agent Escalation Table](#ops_escalation_queue-llm-agent-escalation-table)
-  - [Origin](#origin)
-  - [What it is](#what-it-is)
-  - [How it is written](#how-it-is-written)
-  - [Key design point: not append-only](#key-design-point-not-append-only)
-  - [What needed updating in this package](#what-needed-updating-in-this-package)
-- [`agent_tools` Schema: LLM Agent UC Functions](#agent_tools-schema-llm-agent-uc-functions)
-  - [What it is](#what-it-is-1)
+- [Full LLM Agent Integration](#full-llm-agent-integration)
+  - [Integration Points with Her Majesty Reshma the Boss's Package](#integration-points-with-her-majesty-reshma-the-bosss-package)
+  - [`ops_escalation_queue`: LLM Agent Escalation Table](#ops_escalation_queue-llm-agent-escalation-table)
+    - [Origin](#origin)
+    - [What it is](#what-it-is)
+    - [How it is written](#how-it-is-written)
+    - [Key design point: not append-only](#key-design-point-not-append-only)
+    - [What needed updating in this package](#what-needed-updating-in-this-package)
+  - [`agent_tools` Schema: LLM Agent UC Functions](#agent_tools-schema-llm-agent-uc-functions)
+    - [What it is](#what-it-is-1)
+  - [LLMAgentWrapper: Integration with `LLMReorderAgent`](#llmagentwrapper-integration-with-llmreorderagent)
+    - [Context](#context)
+    - [Point 1 - Wiring `LLMReorderAgent` into `_run_executor`](#point-1---wiring-llmreorderagent-into-_run_executor)
+    - [Point 3 - Duplicate writes to `hist_reorder_decisions`](#point-3---duplicate-writes-to-hist_reorder_decisions)
+    - [Completion status update](#completion-status-update)
  
 ---
 
@@ -567,18 +574,31 @@ LLMAgentWrapper:
   Open (Her Majesty Reshma the Boss) - UC read tools, LangFuse trace structure
 ```
 
-# `ops_escalation_queue`: LLM Agent Escalation Table
+# Full LLM Agent Integration
+## Integration Points with Her Majesty Reshma the Boss's Package
+
+When the two packages were reviewed together, four integration points were identified where the independently-developed components needed to be reconciled before the full system could run. Points 1 and 3 are addressed here. Point 2 was found to be a non-issue on close reading (Her Majesty Reshma the Boss's `_parse_llm_decisions` clamps out-of-range quantities before constructing `ReorderDecision` objects, so by the time `_validate_logical` sees the list, quantities are already within bounds). Point 4 is deferred.
+
+**Point 1 - The `decide()` call path**: `LLMAgentWrapper` manages an async executor thread and calls a `StubLLMAgent` internally. Her `LLMReorderAgent` is a standalone `BaseAgent` subclass that makes the LLM call synchronously inside its own `decide()`. These are not competing alternatives for the same slot - `LLMReorderAgent` belongs *inside* `_run_executor`, called in place of the stub, not passed directly to the runner. The runner always sees `LLMAgentWrapper` as the agent; `LLMReorderAgent` is an internal detail of the executor thread.
+
+**Point 2 - Clamping vs. rejecting on logical invalidity**: `LLMAgentWrapper._validate_logical()` rejects out-of-range `order_qty` values and falls back to `RuleBasedAgent`. Her `LLMReorderAgent._parse_llm_decisions()` clamps them instead - up to `min_order_qty` if below, down to `max_order_qty` if above. On close reading this is not a conflict: the two validations operate on different inputs at different stages. `_parse_llm_decisions` runs on the raw LLM JSON output and clamps before constructing `ReorderDecision` objects. By the time `LLMReorderAgent.decide()` returns a `list[ReorderDecision]` to `_run_executor`, quantities are already within bounds. `_validate_logical` sees a clean list and passes it through. No alignment work needed.
+
+**Point 3 - Duplicate writes to `hist_reorder_decisions`**: The runner's `_write_decision_row()` writes to `hist_reorder_decisions` unconditionally for every decision at sub-step 4. Her `LLMReorderAgent`'s system prompt also instructs the LLM to call the `log_agent_decision` UC tool during the LangGraph loop, which writes a row for the same `(sim_id, tick, item_id)`. Because the table is append-only, Delta does not enforce the primary key constraint on write - duplicate rows accumulate silently. The runner must be the single authoritative writer inside the simulation.
+
+**Point 4 - Tool reads vs. `AgentContext` consistency**: The UC read tools (`get_full_context`, `get_inventory_state`, etc.) query live Delta tables at call time. Since the executor thread runs asynchronously, there is a question of whether the table state the tools read is consistent with the `AgentContext` snapshot the executor was given. Analysis shows this is benign in the common case - the runner writes the relevant tables before calling `agent.decide()`, so by the time the executor fires they reflect the same tick as the context. The risk is bounded by `context_obsolescence_threshold_k`. Formal confirmation is deferred.
+
+## `ops_escalation_queue`: LLM Agent Escalation Table
 
 **Files updated**:
 - [`_dataStoreDefinition/setup4dataStore.py`](./_dataStoreDefinition/setup4dataStore.py) - DDL added to `tables4ops` section
 - [`_dataStoreDefinition/README.md`](./_dataStoreDefinition/README.md) - table entry added to ops schema summary; new `agent_tools` schema section added
 - [`__docs__/simulationSpecs.md`](./__docs__/simulationSpecs.md) - `ops_escalation_queue` added to section 5 (Operational Data Tables) with full column definitions
 
-## Origin
+### Origin
 
 `ops_escalation_queue` was introduced by Her Majesty Reshma the Boss's LLM agent codebase ([`test_reorder_llm_agent`](./test_reorder_llm_agent/)), defined in [`test_reorder_llm_agent/notebooks/UC_Functions.py`](./test_reorder_llm_agent/notebooks/UC_Functions.py). It was not part of the original simulation specification. It is documented here because it lives in the simulation's catalog (`hackathon_of_the_century.tables4ops`) and is a defined part of the interface between the two packages.
 
-## What it is
+### What it is
 
 A human-review queue that the LLM agent writes to when it encounters a situation it cannot resolve autonomously. There are four escalation reasons:
 
@@ -589,26 +609,85 @@ A human-review queue that the LLM agent writes to when it encounters a situation
 
 In all cases the agent still returns a HOLD decision for the affected item via `decide()`, so the simulation tick completes normally. The escalation is a side-channel notification to the human operations layer, not a halt condition.
 
-## How it is written
+### How it is written
 
 The table is written exclusively by the `LLMReorderAgent` via the `escalate_item` UC function (`hackathon_of_the_century.agent_tools.escalate_item`). That function validates the escalation reason and builds the row; the caller tool in `uc_tools.py` performs `INSERT INTO ops_escalation_queue SELECT * FROM escalate_item(...)`. The simulation engine, the `LLMAgentWrapper`, and all rule-based agents have no awareness of this table and never write to it.
 
-## Key design point: not append-only
+### Key design point: not append-only
 
 Unlike every other operational table in `tables4ops`, `ops_escalation_queue` is **not** append-only at the row level (`delta.appendOnly = false`). The `status` column is mutable: it transitions from `OPEN` (escalation raised, not yet reviewed) to `REVIEWED` (human operator has acted). This makes it a live operational queue rather than a pure audit log. The simulation engine never reads from this table during a run.
 
-## What needed updating in this package
+### What needed updating in this package
 
 The table DDL (`CREATE TABLE IF NOT EXISTS`) has been added to `setup4dataStore.py` in the `tables4ops` section, with full column comments and a detailed `%md` cell explaining origin, purpose, and write ownership. The `agent_tools` schema (`hackathon_of_the_century.agent_tools`) has also been added to the catalog-level schema creation block, with a comment clarifying that its contents (UC functions and the registered model) are populated by Her Majesty Reshma the Boss's package, not by this one.
 
-# `agent_tools` Schema: LLM Agent UC Functions
+## `agent_tools` Schema: LLM Agent UC Functions
 
 **Files updated**:
-- [`_dataStoreDefinition/setup4dataStore.py`](./_dataStoreDefinition/setup4dataStore.py) — `create schema if not exists agent_tools` added to catalog-level schema creation block
-- [`_dataStoreDefinition/README.md`](./_dataStoreDefinition/README.md) — new `agent_tools` schema section added
+- [`_dataStoreDefinition/setup4dataStore.py`](./_dataStoreDefinition/setup4dataStore.py) - `create schema if not exists agent_tools` added to catalog-level schema creation block
+- [`_dataStoreDefinition/README.md`](./_dataStoreDefinition/README.md) - new `agent_tools` schema section added
 
-## What it is
+### What it is
 
 `hackathon_of_the_century.agent_tools` is the schema owned by Her Majesty Reshma the Boss's LLM agent codebase ([`test_reorder_llm_agent`](./test_reorder_llm_agent/)). It holds the nine UC functions the `LLMReorderAgent` uses as LangChain tools, plus the registered MLflow model. Its contents are populated via [`test_reorder_llm_agent/notebooks/UC_Functions.py`](./test_reorder_llm_agent//notebooks/UC_Functions.py).
 
 It is declared in `setup4dataStore.py` so that running the setup notebook creates the full catalog layout in one shot, without requiring the agent package's notebook to be run first just to get the schema. The simulation engine has no dependency on anything inside this schema.
+
+## LLMAgentWrapper: Integration with `LLMReorderAgent`
+
+**Files changed**:
+- [`warehouse_sim/agent/llm_agent_wrapper.py`](./warehouse_sim/agent/llm_agent_wrapper.py)
+- [`warehouse_sim/config/llm_agent_wrapper_config.py`](./warehouse_sim/config/llm_agent_wrapper_config.py)
+
+### Context
+
+Two integration points between this package and Her Majesty Reshma the Boss's LLM agent codebase ([`test_reorder_llm_agent`](./test_reorder_llm_agent/)) were resolved here. They are addressed in a single change because the fix for point 3 (duplicate writes) depends on the same `__init__` block introduced for point 1 (wiring).
+
+### Point 1 - Wiring `LLMReorderAgent` into `_run_executor`
+
+**The problem**: `_run_executor` contained `raise NotImplementedError("Real LLM call not yet implemented.")` in the `stub_mode=None` branch. This was also the source of the known devlog gap: no `finally` block meant that if this line was ever reached, `_executor_busy` would never be cleared, silently stopping all future executor dispatches for the rest of the run.
+
+**Where `LLMReorderAgent` fits**: The runner calls `LLMAgentWrapper.decide(context)` every tick. `LLMAgentWrapper` remains the agent the runner knows about. `LLMReorderAgent` is an internal detail - it is called inside `_run_executor`, in the background executor thread, in place of `_StubLLMAgent`. Its `decide(context)` returns `list[ReorderDecision]` directly, which `_validate_structural` already accepts as-is. The async boundary, queue, obsolescence check, and fallback logic all remain unchanged.
+
+**`LLMReorderAgent` is instantiated in `__init__`, not in `_run_executor`**: `LLMReorderAgent.__init__` builds the LangGraph graph and binds tools - non-trivial work that should not happen on every executor dispatch. More importantly, any failure at init time (missing package on path, bad `config.yml`, unreachable LLM endpoint) surfaces immediately at construction rather than silently inside a background thread on the first trigger tick.
+
+**Lazy import**: `LLMReorderAgent` is imported inside `__init__` rather than at module level. This means stub-mode tests can run without the LLM agent package on `sys.path` at all. The class reference is cached in the module-level `_LLMReorderAgentClass` variable so the import fires only once. A clear `ImportError` with a fix message is raised if the package is missing when `stub_mode=None`.
+
+**`try/except` around the LLM call**: The `stub_mode` branch in `_run_executor` is now wrapped in `try/except Exception`. This closes the known `finally`-block gap. On any exception from the LLM call, the except block logs a `FALLBACK_STRUCTURAL` event, writes a fallback `ExecutorResult` to `_result_slot`, clears `_executor_busy`, and returns - so the executor is always left in a consistent idle state.
+
+**New field on `LLMAgentWrapperConfig`**: `llm_agent_config_override: dict | None = None`. This is forwarded to `LLMReorderAgent(config_override=...)`, allowing any field in Her Majesty Reshma the Boss's `config.yml` to be overridden from the simulation side without editing her file.
+
+**New DEP flag**: `[DEP-5]` added to the module docstring documenting the `sys.path` requirement for the LLM agent package.
+
+### Point 3 - Duplicate writes to `hist_reorder_decisions`
+
+**The problem**: `hist_reorder_decisions` has `delta.appendOnly = true` with a primary key of `(sim_id, tick, item_id)`. Two things write to it independently:
+
+- The runner's `_write_decision_row()`, called unconditionally for every decision at sub-step 4.
+- The `log_agent_decision` UC tool, which `LLMReorderAgent`'s system prompt instructs it to call for every item during the LangGraph loop - before `decide()` even returns.
+
+Delta does not enforce the primary key constraint on append writes, so duplicate rows accumulate silently. `escalate_item` has the same structural issue for `ops_escalation_queue`, and is suppressed for consistency even though the runner does not write to that table.
+
+**Resolution**: `LLMAgentWrapper.__init__` temporarily replaces `uc_tools.ALL_TOOLS` with a filtered list that excludes `log_agent_decision` and `escalate_item` by `.name` before `LLMReorderAgent.__init__` runs. `_build_agent_graph()` reads `ALL_TOOLS` at construction time to call `llm.bind_tools(ALL_TOOLS)`, so the filtered list is what gets bound into the LangGraph graph. The original list is restored in a `finally` block immediately after instantiation, so it is always left intact regardless of whether `LLMReorderAgent.__init__` succeeds or raises.
+
+This requires no changes to Her Majesty Reshma the Boss's codebase. The LLM's system prompt still instructs it to call `log_agent_decision`, but with the tool absent from the bound list the LangGraph `tools_node` receives a tool-not-found result for that call and continues without halting. Decisions still flow through correctly via `decide()`'s return value, and the runner's `_write_decision_row()` is the single authoritative writer to `hist_reorder_decisions`.
+
+**New field on `LLMAgentWrapperConfig`**: `suppress_write_tools: bool = True`. The default is `True` because this is always correct inside the simulation. `False` is only relevant when running `LLMReorderAgent` standalone outside the simulation, where the runner's write does not occur.
+
+### Completion status update
+
+```
+✓ LLMAgentWrapper Stage 1  - RuleBasedAgent
+✓ LLMAgentWrapper Stage 2  - LLMAgentWrapperConfig
+✓ LLMAgentWrapper Stage 3  - runner.py resilience wrap
+✓ LLMAgentWrapper Stage 4  - hist_eval_metrics DDL
+✓ LLMAgentWrapper Stage 5  - LLMAgentWrapper monitoring loop
+✓ LLMAgentWrapper Stage 6  - Executor thread + shared result slot + StubLLMAgent
+✓ Integration point 1      - LLMReorderAgent wired into _run_executor; finally-block gap closed
+✓ Integration point 3      - write-tool suppression; duplicate hist_reorder_decisions writes eliminated
+  LLMAgentWrapper Stage 7  - MLflow integration                              <- next
+  Integration point 4      - tool-vs-context timing consistency (deferred)
+  Known gaps               - _executor_busy read outside lock (low priority, CPython-safe)
+                           - _write_eval_metrics error handling
+  Open (Her Majesty Reshma the Boss) - LangFuse trace structure
+```

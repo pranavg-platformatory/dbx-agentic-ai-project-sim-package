@@ -1,14 +1,14 @@
 '''
 llm_agent.py
-test_llm_reorder_agent/llm_agent.py
+/Workspace/Shared/reorder-llm-agent/llm_agent.py
 
-LLM-powered reorder agent - Task 3: real LangGraph tool-calling loop.
+LLM-powered reorder agent — Task 3: real LangGraph tool-calling loop.
 
 Changes from Task 1:
 - _llm_decide() replaces _parse_stub_decisions()
 - LangGraph StateGraph with agent + tools nodes
 - UCFunctionToolkit replaced by local uc_tools.py wrappers
-  (more portable - no dependency on databricks-langchain toolkit)
+  (more portable — no dependency on databricks-langchain toolkit)
 - Structured JSON output parsed back to list[ReorderDecision]
 - MLflow autolog added (Task 4 will extend this further)
 
@@ -61,7 +61,7 @@ def _load_config() -> dict:
         raise FileNotFoundError(
             f'Agent config not found at: {config_path}\n'
             f'Expected config.yml alongside llm_agent.py in '
-            f'test_llm_reorder_agent/'
+            f'/Workspace/Shared/reorder-llm-agent/'
         )
     with open(config_path, 'r') as f:
         return yaml.safe_load(f)
@@ -201,13 +201,17 @@ def _parse_llm_decisions(
     - agent_ver  : agent version string for logging
 
     RETURNS:
-    - list[ReorderDecision] - exactly one per item in context.items()
+    - list[ReorderDecision] — exactly one per item in context.items()
     '''
     # Strip markdown fences if present
     cleaned = re.sub(r'```(?:json)?', '', raw_output).strip()
 
-    # Extract JSON array - find first [ ... ] block
-    match = re.search(r'\[.*\]', cleaned, re.DOTALL)
+    # Extract JSON array — find first [ ... ] block
+    match = re.search(r'\[.*\]', cleaned, re.DOTALL | re.MULTILINE)
+    if not match:
+        # Try finding any array pattern
+        matches = list(re.finditer(r'\[[\s\S]*?\]', cleaned))
+        match = matches[-1] if matches else None
     if not match:
         print(
             f'[LLMReorderAgent] WARNING: could not find JSON array in output. '
@@ -243,7 +247,7 @@ def _parse_llm_decisions(
             decisions.append(ReorderDecision(
                 item_id   = item_id,
                 order_qty = 0,
-                reasoning = '[FALLBACK] item missing from LLM output - holding',
+                reasoning = '[FALLBACK] item missing from LLM output — holding',
             ))
             continue
 
@@ -364,7 +368,7 @@ def _build_graph(llm_with_tools: Any):
 
 class LLMReorderAgent(BaseAgent):
     '''
-    LLM-powered reorder agent - Task 3: real LangGraph loop.
+    LLM-powered reorder agent — Task 3: real LangGraph loop.
 
     Usage:
         import sys
@@ -388,8 +392,9 @@ class LLMReorderAgent(BaseAgent):
         self._system_prompt  = self._config.get('agent_prompt', '')
         self._llm_endpoint   = self._config.get('llm_endpoint', '')
         self._warehouse_id   = self._config.get('warehouse_id', '')
+        self._uc_functions   = self._config.get('uc_functions', [])
 
-        # MLflow autolog - traces every LLM call and tool invocation
+        # MLflow autolog — traces every LLM call and tool invocation
         # automatically. No manual span instrumentation needed.
         if self._config.get('mlflow_autolog', True):
             mlflow.langchain.autolog()
@@ -398,7 +403,7 @@ class LLMReorderAgent(BaseAgent):
         # Set MLflow experiment so traces go to the right place
         experiment_name = self._config.get(
             'mlflow_experiment_name',
-            'test_llm_reorder_agent/experiments/llm_reorder_agent'
+            '/Shared/reorder-llm-agent/experiments/llm_reorder_agent'
         )
         try:
             mlflow.set_experiment(experiment_name)
@@ -413,6 +418,9 @@ class LLMReorderAgent(BaseAgent):
             f'[LLMReorderAgent] initialised\n'
             f'  version        : {self._agent_version}\n'
             f'  llm_endpoint   : {self._llm_endpoint}\n'
+            f'  warehouse_id   : {self._warehouse_id}\n'
+            f'  uc_functions   : {len(self._uc_functions)} registered\n' 
+            f'  history_window : {self._history_window} ticks\n'          
             f'  mode           : LIVE (LangGraph loop active)\n'
         )
 
@@ -431,14 +439,6 @@ class LLMReorderAgent(BaseAgent):
                     'databricks-langchain not installed. '
                     'Run: %pip install databricks-langchain langgraph'
                 )
-        
-        # try:
-        #     from langchain_databricks import ChatDatabricks
-        # except ImportError:
-        #     raise ImportError(
-        #         'langchain-databricks not installed. '
-        #         'Run: %pip install langchain-databricks langgraph'
-        #     )
 
         llm = ChatDatabricks(
             endpoint  = self._llm_endpoint,
@@ -470,7 +470,7 @@ class LLMReorderAgent(BaseAgent):
             HumanMessage(content=prompt),
         ]
 
-        # Each tick is a child run - tags make it filterable in UI
+        # Each tick is a child run — tags make it filterable in UI
         run_tags = {
             'sim_id'       : context.sim_id,
             'tick'         : str(context.tick),
@@ -501,10 +501,6 @@ class LLMReorderAgent(BaseAgent):
                     raw_output    = final_message.content
                     span.set_outputs({'response_chars': len(raw_output)})
 
-                # Final message - no tool calls means LLM is done
-                final_message = result['messages'][-1]
-                raw_output    = final_message.content
-
                 print(
                     f'[LLMReorderAgent] tick={context.tick} '
                     f'LLM response ({len(raw_output)} chars) received'
@@ -534,7 +530,7 @@ class LLMReorderAgent(BaseAgent):
 
     def decide(self, context: AgentContext) -> list[ReorderDecision]:
         '''
-        Entry point - called by SimRunner once per tick,
+        Entry point — called by SimRunner once per tick,
         or directly in standalone tests.
 
         Serialises context → runs LangGraph loop → parses decisions.

@@ -1,5 +1,5 @@
-'''
-warehouse_sim/agent/base.py
+"""
+Based on: warehouse_sim/agent/base.py
 
 Agent contract for the warehouse reorder simulation.
 
@@ -18,7 +18,7 @@ Usage:
     class MyAgent(BaseAgent):
         def decide(self, context: AgentContext) -> list[ReorderDecision]:
             ...
-'''
+"""
 
 from __future__ import annotations
 
@@ -33,10 +33,10 @@ from typing import Optional
 
 @dataclass(frozen=True)
 class ItemState:
-    '''
+    """
     Stock snapshot for one item, as seen by the agent at decision time
-    (end of sub-step 3b - after arrivals and demand depletion).
-    '''
+    (end of sub-step 3b — after arrivals and demand depletion).
+    """
     item_id:                     str
     stock_on_hand:               int   # current units in warehouse (>= 0)
     stock_in_transit:            int   # units on order, not yet arrived
@@ -48,7 +48,7 @@ class ItemState:
 
 @dataclass(frozen=True)
 class PendingOrder:
-    '''One pending (undelivered) order, surfaced to the agent.'''
+    """One pending (undelivered) order, surfaced to the agent."""
     order_id:              str
     item_id:               str
     supplier_id:           str
@@ -59,7 +59,7 @@ class PendingOrder:
 
 @dataclass(frozen=True)
 class DemandRecord:
-    '''One row from hist_demand_actuals, surfaced as demand history.'''
+    """One row from hist_demand_actuals, surfaced as demand history."""
     tick:             int
     item_id:          str
     raw_demand:       float
@@ -70,7 +70,7 @@ class DemandRecord:
 
 @dataclass(frozen=True)
 class ActiveDisruption:
-    '''One active disruption row for this tick.'''
+    """One active disruption row for this tick."""
     disruption_id:       str
     item_id:             str
     disruption_type:     str
@@ -80,10 +80,10 @@ class ActiveDisruption:
 
 @dataclass(frozen=True)
 class CostSnapshot:
-    '''
+    """
     Read-only cost accumulator snapshot for one item,
     as seen by the agent at decision time.
-    '''
+    """
     item_id:                      str
     cumulative_holding_cost:      float
     cumulative_stockout_cost:     float
@@ -99,7 +99,7 @@ class CostSnapshot:
 
 @dataclass(frozen=True)
 class AgentContext:
-    '''
+    """
     The complete read-only snapshot delivered to the agent at sub-step 4
     of each tick, after arrivals (3a) and demand depletion (3b).
 
@@ -117,7 +117,7 @@ class AgentContext:
     active_disruptions : disruptions active this tick (is_active_this_tick=True)
     cost_snapshots     : cumulative cost totals per item (keyed by item_id)
     remaining_budget   : global remaining budget (None if unlimited)
-    '''
+    """
     sim_id:             str
     tick:               int
     item_states:        dict[str, ItemState]
@@ -128,19 +128,19 @@ class AgentContext:
     remaining_budget:   Optional[float]
 
     def items(self) -> list[str]:
-        '''Sorted list of item_ids the agent is responsible for.'''
+        """Sorted list of item_ids the agent is responsible for."""
         return sorted(self.item_states.keys())
 
     def pending_for(self, item_id: str) -> list[PendingOrder]:
-        '''Pending orders for one item.'''
+        """Pending orders for one item."""
         return [o for o in self.pending_orders if o.item_id == item_id]
 
     def history_for(self, item_id: str) -> list[DemandRecord]:
-        '''Demand history for one item, oldest first.'''
+        """Demand history for one item, oldest first."""
         return self.demand_history.get(item_id, [])
 
     def disruptions_for(self, item_id: str) -> list[ActiveDisruption]:
-        '''Active disruptions for one item this tick.'''
+        """Active disruptions for one item this tick."""
         return [d for d in self.active_disruptions if d.item_id == item_id]
 
 
@@ -150,7 +150,7 @@ class AgentContext:
 
 @dataclass(frozen=True)
 class ReorderDecision:
-    '''
+    """
     The agent's decision for one item in one tick.
 
     Fields
@@ -165,7 +165,7 @@ class ReorderDecision:
       - order_qty >  0  ->  decision logged as REORDER
       - order_qty must satisfy min_order_qty <= order_qty <= max_order_qty
         when > 0
-    '''
+    """
     item_id:   str
     order_qty: int
     reasoning: Optional[str] = None
@@ -184,7 +184,7 @@ class ReorderDecision:
 # ---------------------------------------------------------------------------
 
 class BaseAgent(ABC):
-    '''
+    """
     Abstract base class for all reorder agents.
 
     Subclass this and implement `decide`. The engine calls `decide` once
@@ -195,11 +195,11 @@ class BaseAgent(ABC):
       - Write to any table directly
       - Mutate the AgentContext
       - Retain mutable state that would break reproducibility
-    '''
+    """
 
     @abstractmethod
     def decide(self, context: AgentContext) -> list[ReorderDecision]:
-        '''
+        """
         Evaluate the current simulation state and return reorder decisions.
 
         Parameters
@@ -212,13 +212,13 @@ class BaseAgent(ABC):
         list[ReorderDecision]
             One decision per item in context.items(). The engine will raise
             if an item is missing from the returned list.
-        '''
+        """
         ...
 
     def agent_version(self) -> str:
-        '''
+        """
         Version/identifier string for this agent.
         Stored in hist_reorder_decisions.agent_version.
         Override in subclasses for meaningful labels.
-        '''
+        """
         return self.__class__.__name__

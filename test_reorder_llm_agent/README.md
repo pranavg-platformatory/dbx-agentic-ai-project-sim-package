@@ -1,4 +1,4 @@
-<h1>Databricks Agentic AI Project:<br><i>Test LLM Reorder Agent Codebase</i></h1>
+<h1>Databricks Agentic AI Project:<br><i>Test Reorder LLM Agent Codebase</i></h1>
 
 *Codebase for testing an LLM reorder agent for the Databricks agentic AI project.*
 

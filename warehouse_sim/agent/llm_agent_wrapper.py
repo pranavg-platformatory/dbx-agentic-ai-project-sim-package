@@ -275,15 +275,26 @@ class LLMAgentWrapper(BaseAgent):
             self._last_committed = pending.decisions
 
         # (b) Trigger check and executor dispatch
-        #
-        # Conditions for dispatch:
-        # - Trigger condition met (tick % N == 0)
-        # - Executor is not already busy
         # 
         # NOTE:
         # - If the executor is still running when the trigger fires, the tick is skipped silently
         # - The monitoring loop has continued queuing messages, so the executor will have a fresh context to drain to on the next dispatch
-        trigger_met = (context.tick % self._config.executor_trigger_every_n_ticks == 0)
+        #
+        # [PREVIOUS] Conditions for dispatch:
+        # - Trigger condition met (tick % N == 0)
+        # - Executor is not already busy
+        #
+        # [CURRENT] Conditions for dispatch:
+        # - tick > 0 guard: tick % N == 0 is True for ANY N at tick 0
+        # - So without this guard the executor would always dispatch on the very first tick regardless of the configured interval
+        # 
+        # NOTE ON [CURRENT] VS [PREVIOUS]:
+        # - Tick 0 has no meaningful state to reason over (no demand drawn, no arrivals processed)
+        # - The first eligible dispatch is at tick N
+        trigger_met = (
+            context.tick > 0
+            and context.tick % self._config.executor_trigger_every_n_ticks == 0
+        )
 
         if trigger_met and not self._executor_busy:
             # KEY NOTES:
@@ -613,8 +624,7 @@ class LLMAgentWrapper(BaseAgent):
         for item_id, item_state in context.item_states.items():
 
             # TODO: replace stub values with computed metrics
-            # Stub values of 0.0 are placeholders that keep the write
-            # pipeline exercisable before metric logic is finalised.
+            # NOTE: Stub values of 0.0 are placeholders that keep the write pipeline exercisable before metric logic is finalised.
 
             # stockout_rate: fraction of demand unmet over the history window.
             # Source: context.demand_history[item_id] - sum(unmet) / sum(disrupted_demand)

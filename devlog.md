@@ -42,6 +42,12 @@
     - [Stage 6 - `LLMAgentWrapper`: executor thread and shared result slot](#stage-6---llmagentwrapper-executor-thread-and-shared-result-slot)
     - [Stage 7 - MLflow integration](#stage-7---mlflow-integration)
   - [Completion Status](#completion-status-1)
+- [`ops_escalation_queue`: LLM Agent Escalation Table](#ops_escalation_queue-llm-agent-escalation-table)
+  - [Origin](#origin)
+  - [What it is](#what-it-is)
+  - [How it is written](#how-it-is-written)
+  - [Key design point: not append-only](#key-design-point-not-append-only)
+  - [What needed updating in this package](#what-needed-updating-in-this-package)
  
 ---
 
@@ -558,3 +564,37 @@ LLMAgentWrapper:
   Known gaps    - finally block, _executor_busy lock consistency, _write_eval_metrics error handling
   Open (Her Majesty Reshma the Boss) - UC read tools, LangFuse trace structure
 ```
+
+# `ops_escalation_queue`: LLM Agent Escalation Table
+
+**Files updated**:
+- [`_dataStoreDefinition/setup4dataStore.py`](./_dataStoreDefinition/setup4dataStore.py) - DDL added to `tables4ops` section
+- [`_dataStoreDefinition/README.md`](./_dataStoreDefinition/README.md) - table entry added to ops schema summary; new `agent_tools` schema section added
+- [`__docs__/simulationSpecs.md`](./__docs__/simulationSpecs.md) - `ops_escalation_queue` added to section 5 (Operational Data Tables) with full column definitions
+
+## Origin
+
+`ops_escalation_queue` was introduced by Her Majesty Reshma the Boss in her LLM agent package (`dbx-agentic-ai-project-test-llm-reorder-agent-package`), defined in `notebooks/UC_Functions.py`. It was not part of the original simulation specification. It is documented here because it lives in the simulation's catalog (`hackathon_of_the_century.tables4ops`) and is a defined part of the interface between the two packages.
+
+## What it is
+
+A human-review queue that the LLM agent writes to when it encounters a situation it cannot resolve autonomously. There are four escalation reasons:
+
+- `BUDGET_BREACH` - a reorder is needed but its cost would exceed the remaining budget
+- `STOCKOUT_IMMINENT` - stockout will occur within 1 tick and no pending order can arrive in time
+- `NO_SUPPLIER` - no supplier information is available for the item
+- `OTHER` - any other situation the agent judges to warrant human review
+
+In all cases the agent still returns a HOLD decision for the affected item via `decide()`, so the simulation tick completes normally. The escalation is a side-channel notification to the human operations layer, not a halt condition.
+
+## How it is written
+
+The table is written exclusively by the `LLMReorderAgent` (Her Majesty Reshma the Boss's package) via the `escalate_item` UC function (`hackathon_of_the_century.agent_tools.escalate_item`). That function validates the escalation reason and builds the row; the caller tool in `uc_tools.py` performs `INSERT INTO ops_escalation_queue SELECT * FROM escalate_item(...)`. The simulation engine, the `LLMAgentWrapper`, and all rule-based agents have no awareness of this table and never write to it.
+
+## Key design point: not append-only
+
+Unlike every other operational table in `tables4ops`, `ops_escalation_queue` is **not** append-only at the row level (`delta.appendOnly = false`). The `status` column is mutable: it transitions from `OPEN` (escalation raised, not yet reviewed) to `REVIEWED` (human operator has acted). This makes it a live operational queue rather than a pure audit log. The simulation engine never reads from this table during a run.
+
+## What needed updating in this package
+
+The table DDL (`CREATE TABLE IF NOT EXISTS`) has been added to `setup4dataStore.py` in the `tables4ops` section, with full column comments and a detailed `%md` cell explaining origin, purpose, and write ownership. The `agent_tools` schema (`hackathon_of_the_century.agent_tools`) has also been added to the catalog-level schema creation block, with a comment clarifying that its contents (UC functions and the registered model) are populated by Her Majesty Reshma the Boss's package, not by this one.

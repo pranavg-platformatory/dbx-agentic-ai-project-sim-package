@@ -1,6 +1,6 @@
-<h1>Databricks Agentic AI Project:<br><i>Simulation Package</i></h1>
+<h1>Databricks Agentic AI Project:<br><i>Warehouse Simulation Package</i></h1>
 
-*Simulation package for the Databricks agentic AI project.*
+*Warehouse simulation package for the Databricks agentic AI project.*
 
 > **Key Related Repositories**:
 > 

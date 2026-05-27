@@ -406,11 +406,10 @@ _record("T5a.ii", "valid: one decision per item, all order_qty == min_order_qty"
     all(d.order_qty == _ITEM_STATES[d.item_id].min_order_qty for d in slot.decisions),
     f"decisions={[(d.item_id, d.order_qty) for d in slot.decisions] if slot else 'N/A'}")
 
+# The implementation uses typed logger methods (fallback_structural, fallback_logical). Assert those typed methods were NOT called.
 _record("T5a.iii", "valid: no FALLBACK events logged",
-    not any(
-        call.kwargs.get("event_type", "").startswith("FALLBACK")
-        for call in llm_agent_wrapper_valid._logger.log_event.call_args_list
-    ))
+    llm_agent_wrapper_valid._logger.fallback_structural.call_count == 0
+    and llm_agent_wrapper_valid._logger.fallback_logical.call_count == 0)
 
 # ── T5b: structural_fail - FALLBACK_STRUCTURAL path ──────────────────────────
 llm_agent_wrapper_sf  = _make_llm_agent_wrapper(stub_mode="structural_fail")
@@ -426,11 +425,9 @@ _record("T5b.i", "structural_fail: fallback_type == 'FALLBACK_STRUCTURAL'",
     slot is not None and slot.fallback_type == "FALLBACK_STRUCTURAL",
     f"fallback_type={slot.fallback_type if slot else 'N/A'}")
 
+# The implementation calls self._logger.fallback_structural(...) directly. Assert the typed method was called exactly once.
 _record("T5b.ii", "structural_fail: FALLBACK_STRUCTURAL event logged",
-    any(
-        call.kwargs.get("event_type") == "FALLBACK_STRUCTURAL"
-        for call in llm_agent_wrapper_sf._logger.log_event.call_args_list
-    ))
+    llm_agent_wrapper_sf._logger.fallback_structural.call_count == 1)
 
 _record("T5b.iii", "structural_fail: RuleBasedAgent decisions returned (item_a reorders)",
     slot is not None and
@@ -452,11 +449,9 @@ _record("T5c.i", "logical_fail: fallback_type == 'FALLBACK_LOGICAL'",
     slot is not None and slot.fallback_type == "FALLBACK_LOGICAL",
     f"fallback_type={slot.fallback_type if slot else 'N/A'}")
 
+# The implementation calls self._logger.fallback_logical(...) directly. Assert the typed method was called exactly once.
 _record("T5c.ii", "logical_fail: FALLBACK_LOGICAL event logged",
-    any(
-        call.kwargs.get("event_type") == "FALLBACK_LOGICAL"
-        for call in llm_agent_wrapper_lf._logger.log_event.call_args_list
-    ))
+    llm_agent_wrapper_lf._logger.fallback_logical.call_count == 1)
 
 # ── T5d: all-stale queue ──────────────────────────────────────────────────────
 llm_agent_wrapper_stale = _make_llm_agent_wrapper(stub_mode="valid")
@@ -469,11 +464,9 @@ _record("T5d", "all-stale: _result_slot remains None",
     llm_agent_wrapper_stale._result_slot is None,
     f"_result_slot={llm_agent_wrapper_stale._result_slot}")
 
+# The implementation calls self._logger.executor_all_stale(...) directly. Assert the typed method was called exactly once.
 _record("T5d.i", "all-stale: EXECUTOR_ALL_STALE event logged",
-    any(
-        call.kwargs.get("event_type") == "EXECUTOR_ALL_STALE"
-        for call in llm_agent_wrapper_stale._logger.log_event.call_args_list
-    ))
+    llm_agent_wrapper_stale._logger.executor_all_stale.call_count == 1)
 
 # ── T5e: empty queue snapshot ─────────────────────────────────────────────────
 llm_agent_wrapper_empty = _make_llm_agent_wrapper(stub_mode="valid")
@@ -482,11 +475,9 @@ llm_agent_wrapper_empty._run_executor([], current_tick=5)
 _record("T5e", "empty queue: _result_slot remains None",
     llm_agent_wrapper_empty._result_slot is None)
 
+# Same as T5d.i - empty queue also triggers executor_all_stale.
 _record("T5e.i", "empty queue: EXECUTOR_ALL_STALE event logged",
-    any(
-        call.kwargs.get("event_type") == "EXECUTOR_ALL_STALE"
-        for call in llm_agent_wrapper_empty._logger.log_event.call_args_list
-    ))
+    llm_agent_wrapper_empty._logger.executor_all_stale.call_count == 1)
 
 # ── T5f: obsolescence boundary ───────────────────────────────────────────────
 # A message at exactly the boundary (age == k) should NOT be stale.
@@ -513,26 +504,29 @@ _record("T5f", "obsolescence boundary: age == k is NOT stale (slot populated)",
 
 _header("T6", "decide() - monitoring loop only (executor never fires)")
 
-llm_agent_wrapper    = _make_llm_agent_wrapper(stub_mode="valid", n_ticks=9999)
-context = _make_context(tick=0)
+llm_agent_wrapper = _make_llm_agent_wrapper(stub_mode="valid", n_ticks=9999)
 
-# Run 5 ticks
-for t in range(5):
-    ctx  = _make_context(tick=t)
+# KEY POINT: Start from tick 1, not tick 0. Why?
+# - tick % N == 0 is True for ANY N at tick 0
+# - So tick 0 would trigger the executor regardless of n_ticks=9999
+# - The implementation guards against this with `tick > 0` in the trigger condition
+# - Starting at 1 here makes the test's intent explicit and avoids relying solely on that guard
+for t in range(1, 6):
+    ctx    = _make_context(tick=t)
     result = llm_agent_wrapper.decide(ctx)
 
-    # hold-all every tick
+    # executor_trigger_every_n_ticks=9999 and tick > 0 guard mean the executor never fires - hold-all expected every tick
     _record(f"T6.tick{t}", f"tick {t}: decide() returns hold-all",
         all(d.order_qty == 0 for d in result),
         f"order_qtys={[d.order_qty for d in result]}")
 
-# Queue should have the last min(5, queue_size=3) messages
+# After ticks 1-5 with queue_size=3, the deque holds the last 3: ticks 3, 4, 5
 _record("T6.queue", "Queue holds the last queue_size messages after 5 ticks",
     len(llm_agent_wrapper._queue) == 3,
     f"queue length={len(llm_agent_wrapper._queue)}")
 
-_record("T6.queue_ticks", "Queue contains messages for ticks 2, 3, 4 (newest 3)",
-    [m.trigger_tick for m in llm_agent_wrapper._queue] == [2, 3, 4],
+_record("T6.queue_ticks", "Queue contains messages for ticks 3, 4, 5 (newest 3)",
+    [m.trigger_tick for m in llm_agent_wrapper._queue] == [3, 4, 5],
     f"trigger_ticks={[m.trigger_tick for m in llm_agent_wrapper._queue]}")
 
 # COMMAND ----------

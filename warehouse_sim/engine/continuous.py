@@ -1,7 +1,7 @@
 '''
 warehouse_sim/engine/continuous.py
 
-ContinuousRunner — a thin subclass of SimRunner that adds three capabilities
+ContinuousRunner - a thin subclass of SimRunner that adds three capabilities
 on top of the base engine, without touching any simulation logic:
 
   1. Wall-clock pacing    : sleeps between ticks so each tick represents
@@ -47,7 +47,7 @@ from ..event_log.event_log import EventLogger
 from ..agent.base import BaseAgent
 
 # NOTE: PatternSampler is kept in the constructor signature for consistency
-# with SimRunner — it is not used internally by ContinuousRunner itself.
+# with SimRunner - it is not used internally by ContinuousRunner itself.
 
 if TYPE_CHECKING:
     from pyspark.sql import SparkSession
@@ -119,7 +119,7 @@ class ContinuousRunner(SimRunner):
         self._progress  = progress or ProgressConfig()
         self._run_start: Optional[datetime] = None
 
-        # Per-tick display state — populated in _run_tick after each parent call,
+        # Per-tick display state - populated in _run_tick after each parent call,
         # then consumed by _maybe_print_progress in the same tick.
         self._last_tick_stockouts:  dict[str, int] = {}
         self._last_tick_active_dis: int            = 0
@@ -207,7 +207,7 @@ class ContinuousRunner(SimRunner):
         
         `[tick    N/∞]  Xs elapsed  ETA Ys  │  item_A:  NN  item_B:  NN  cost=£NNN  orders= N pending  ⚠ stockout: item_A(N)  🔴 disruptions=N`
         
-        ETA is shown only in finite mode; in infinite/cyclic mode it displays `—`.
+        ETA is shown only in finite mode; in infinite/cyclic mode it displays `-`.
         '''
 
         cfg = self._progress
@@ -222,13 +222,13 @@ class ContinuousRunner(SimRunner):
         elapsed     = datetime.now(timezone.utc) - self._run_start
         elapsed_str = _fmt_duration(elapsed)
 
-        # ETA — only meaningful in finite mode
+        # ETA - only meaningful in finite mode
         if num_ticks and tick > 0:
             ticks_left    = num_ticks - tick - 1
             secs_per_tick = elapsed.total_seconds() / (tick + 1)
             eta_str       = _fmt_duration(timedelta(seconds=ticks_left * secs_per_tick))
         else:
-            eta_str = "—"
+            eta_str = "-"
 
         # Stock on hand per item (sorted for stable output)
         stock_str = "  ".join(
@@ -236,7 +236,7 @@ class ContinuousRunner(SimRunner):
             for item_id, state in sorted(self._stock_states.items())
         )
 
-        # Optional suffix fields — only appended when their flag is set
+        # Optional suffix fields - only appended when their flag is set
         cost_str = (
             f"  cost=£{sum(cs.cumulative_total for cs in self._cost_states.values()):,.0f}"
             if cfg.show_costs else ""
@@ -322,9 +322,9 @@ class ContinuousRunner(SimRunner):
         Delegate the full tick to SimRunner._run_tick, then capture the
         per-tick state needed to render the progress line.
 
-        Overrides SimRunner._run_tick. All simulation logic — disruption
+        Overrides SimRunner._run_tick. All simulation logic - disruption
         evaluation, demand draw, agent decision, cost accumulation, table
-        writes — remains in the parent method, unchanged.
+        writes - remains in the parent method, unchanged.
 
         ---
 
@@ -361,7 +361,7 @@ class ContinuousRunner(SimRunner):
             if cs.cumulative_stockout_cost > pre_stockout.get(item_id, 0.0)
         }
 
-        # Active disruption count — deterministic only, no RNG draw needed.
+        # Active disruption count - deterministic only, no RNG draw needed.
         self._last_tick_active_dis = sum(
             1 for d in self._world.disruptions
             if d.start_tick <= tick <= d.end_tick

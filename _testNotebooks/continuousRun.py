@@ -159,7 +159,7 @@ world = SimWorld(
         "item_A": Pattern(
             pattern_id="pat_A", sim_id=SIM_ID, item_id="item_A",
             role=PatternRole.DEMAND, pattern_type=PatternType.CUSTOM,
-            # 5-tick cycle — repeats indefinitely via cycling
+            # 5-tick cycle - repeats indefinitely via cycling
             custom_schedule=[10.0, 15.0, 20.0, 12.0, 8.0],
             seasonal_multiplier_schedule=[1.0, 1.1, 1.2, 1.0, 0.9, 1.0, 0.8],
             noise_std=2.0,
@@ -248,18 +248,18 @@ print("✓ ContinuousReorderAgent defined")
 # MAGIC
 # MAGIC Progress is printed every `PRINT_EVERY_N_TICKS` ticks:
 # MAGIC ```
-# MAGIC [tick    0/∞]  0s elapsed  ETA —  │  item_A:   80  item_B:   40  cost=£0  orders= 0 pending
-# MAGIC [tick    1/∞]  2s elapsed  ETA —  │  item_A:   70  item_B:   32  cost=£8  orders= 0 pending  ⚠ stockout: item_A(2)
+# MAGIC [tick    0/∞]  0s elapsed  ETA -  │  item_A:   80  item_B:   40  cost=£0  orders= 0 pending
+# MAGIC [tick    1/∞]  2s elapsed  ETA -  │  item_A:   70  item_B:   32  cost=£8  orders= 0 pending  ⚠ stockout: item_A(2)
 # MAGIC ```
 # MAGIC
 # MAGIC Columns:
-# MAGIC - `elapsed` — wall-clock time since run started
-# MAGIC - `ETA` — estimated time to completion (∞ mode always shows `—`)
-# MAGIC - `item_X: N` — stock on hand per item
-# MAGIC - `cost` — cumulative total cost across all items
-# MAGIC - `orders` — units currently in transit
-# MAGIC - `⚠ stockout` — items with unmet demand this tick (and units short)
-# MAGIC - `🔴 disruptions` — number of deterministic disruptions active this tick
+# MAGIC - `elapsed` - wall-clock time since run started
+# MAGIC - `ETA` - estimated time to completion (∞ mode always shows `-`)
+# MAGIC - `item_X: N` - stock on hand per item
+# MAGIC - `cost` - cumulative total cost across all items
+# MAGIC - `orders` - units currently in transit
+# MAGIC - `⚠ stockout` - items with unmet demand this tick (and units short)
+# MAGIC - `🔴 disruptions` - number of deterministic disruptions active this tick
 
 # COMMAND ----------
 
@@ -312,7 +312,7 @@ display(spark.sql(f"""
 
 # COMMAND ----------
 
-# MAGIC %md ### Stock levels — last 10 ticks
+# MAGIC %md ### Stock levels - last 10 ticks
 
 # COMMAND ----------
 
@@ -330,7 +330,7 @@ display(spark.sql(f"""
 
 # COMMAND ----------
 
-# MAGIC %md ### Disruption activations — how often did they fire?
+# MAGIC %md ### Disruption activations - how often did they fire?
 
 # COMMAND ----------
 
@@ -347,7 +347,7 @@ display(spark.sql(f"""
 
 # COMMAND ----------
 
-# MAGIC %md ### Cost accumulation — final totals per item
+# MAGIC %md ### Cost accumulation - final totals per item
 
 # COMMAND ----------
 
@@ -366,7 +366,7 @@ display(spark.sql(f"""
 
 # COMMAND ----------
 
-# MAGIC %md ### Event log — type counts
+# MAGIC %md ### Event log - type counts
 
 # COMMAND ----------
 

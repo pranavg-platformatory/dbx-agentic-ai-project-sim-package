@@ -1,0 +1,43 @@
+bundle:
+  name: llm_reorder_agent
+
+variables:
+  catalog:
+    default: hackathon_of_the_century
+  schema:
+    default: agent_tools
+  llm_endpoint:
+    default: databricks-meta-llama-3-3-70b-instruct
+  warehouse_id:
+    default: "2fb34e3c292a8ac3"
+
+resources:
+
+  # The served agent endpoint
+  model_serving_endpoints:
+    reorder_agent_endpoint:
+      name: reorder-agent-endpoint
+      config:
+        served_entities:
+          - name: llm_reorder_agent
+            entity_name: >-
+              hackathon_of_the_century.agent_tools.llm_reorder_agent
+            entity_version: "1"
+            workload_size: Small
+            scale_to_zero_enabled: true
+        traffic_config:
+          routes:
+            - served_model_name: llm_reorder_agent
+              traffic_percentage: 100
+      permissions:
+        - level: CAN_QUERY
+          group_name: users
+
+  # The MLflow experiment
+  experiments:
+    llm_reorder_agent_experiment:
+      name: >-
+        /Shared/reorder-llm-agent/experiments/llm_reorder_agent
+      permissions:
+        - level: CAN_READ
+          group_name: users

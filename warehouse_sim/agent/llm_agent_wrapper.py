@@ -837,7 +837,6 @@ class LLMAgentWrapper(BaseAgent):
 
         # Write all rows for this tick in a single Spark operation.
         # NOTE: One append per tick (not per row) to minimise write overhead.
-        print("HELLO!")
         if rows:
             (
                 self._spark
@@ -846,8 +845,6 @@ class LLMAgentWrapper(BaseAgent):
                 .mode("append")
                 .saveAsTable(_EVAL_METRICS_TABLE)
             )
-        print("BYE!")
-
 
 # ---------------------------------------------------------------------------
 # _StubLLMAgent (simulation phase only)

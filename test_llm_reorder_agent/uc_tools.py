@@ -1,6 +1,6 @@
 '''
 uc_tools.py
-/Workspace/Shared/reorder-llm-agent/uc_tools.py
+test_llm_reorder_agent/uc_tools.py
 
 Wraps UC functions as LangChain tools for use by the LangGraph agent.
 
@@ -14,7 +14,7 @@ but marked so the agent can be told to skip them until fixed.
 Design:
 - Tools are pure read wrappers except log_agent_decision and
   escalate_item which do INSERT ... SELECT via spark.sql
-- No SparkSession.builder.getOrCreate() — uses the existing
+- No SparkSession.builder.getOrCreate() - uses the existing
   active session only, which is safe on the driver
 - Each tool returns a clean string the LLM can read directly
 '''
@@ -28,14 +28,14 @@ from langchain_core.tools import tool
 
 
 # ---------------------------------------------------------------------------
-# Helper — get active Spark session safely
+# Helper - get active Spark session safely
 # ---------------------------------------------------------------------------
 
 def _get_spark():
     '''
     Returns the active SparkSession without creating a new one.
     Raises RuntimeError if no session is active, which is the correct
-    behaviour — we never want to create a SparkContext on a worker.
+    behaviour - we never want to create a SparkContext on a worker.
     '''
     from pyspark.sql import SparkSession
     spark = SparkSession.getActiveSession()
@@ -287,7 +287,7 @@ def escalate_item(
     return f'escalated: {item_id} reason={reason} tick={tick}'
 
 
-# uc_tools.py — add this tool
+# uc_tools.py - add this tool
 @tool
 def get_full_context(sim_id: str, item_id: str, history_ticks: int = 10) -> str:
     '''
@@ -314,7 +314,7 @@ def get_full_context(sim_id: str, item_id: str, history_ticks: int = 10) -> str:
 
 
     # ---------------------------------------------------------------------------
-# Tool registry — exported for use in llm_agent.py
+# Tool registry - exported for use in llm_agent.py
 # ---------------------------------------------------------------------------
 
 ALL_TOOLS = [

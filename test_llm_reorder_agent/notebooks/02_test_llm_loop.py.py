@@ -3,12 +3,12 @@
 
 # COMMAND ----------
 # MAGIC %md
-# MAGIC # Task 3 — LangGraph Tool-Calling Loop Verification
+# MAGIC # Task 3 - LangGraph Tool-Calling Loop Verification
 # MAGIC Tests the live LLM agent end-to-end with a mock AgentContext.
 # MAGIC No simulator required. Each cell is independent.
 
 # COMMAND ----------
-# Cell 1 — install dependencies
+# Cell 1 - install dependencies
 
 %pip install databricks-langchain langgraph langchain-core
 
@@ -16,7 +16,7 @@
 
 # COMMAND ----------
 
-# Cell 2 — path setup and imports
+# Cell 2 - path setup and imports
 
 import sys
 import importlib
@@ -30,7 +30,7 @@ if 'llm_agent' in sys.modules:
 if 'uc_tools' in sys.modules:
     del sys.modules['uc_tools']
 
-sys.path.insert(0, '/Workspace/Shared/reorder-llm-agent')
+sys.path.insert(0, '/Workspacetest_llm_reorder_agent')
 
 from llm_agent import LLMReorderAgent, serialise_context
 from base import (
@@ -47,10 +47,10 @@ dbutils.library.restartPython()
 # COMMAND ----------
 
 # COMMAND ----------
-# Cell 2 — path setup and imports
+# Cell 2 - path setup and imports
 
 import sys
-sys.path.insert(0, '/Workspace/Shared/reorder-llm-agent')
+sys.path.insert(0, '/Workspacetest_llm_reorder_agent')
 
 from llm_agent import LLMReorderAgent, serialise_context
 from base import (
@@ -63,7 +63,7 @@ print('✓ imports resolved')
 # COMMAND ----------
 
 # COMMAND ----------
-# Cell 3 — build mock context (same as Task 1 but richer)
+# Cell 3 - build mock context (same as Task 1 but richer)
 
 mock_context = AgentContext(
     sim_id = 'sim_stage4_001',
@@ -144,7 +144,7 @@ print('✓ mock context built')
 # COMMAND ----------
 
 # DBTITLE 1,Cell 4
-# Cell 4 — Test A: agent initialises and graph compiles
+# Cell 4 - Test A: agent initialises and graph compiles
 
 agent = LLMReorderAgent()
 assert agent._graph is not None, 'LangGraph graph should be compiled'
@@ -160,8 +160,8 @@ for ep in w.serving_endpoints.list():
 # COMMAND ----------
 
 # COMMAND ----------
-# Cell 5 — Test B: full decide() call with live LLM
-# This is the real test — LLM will reason, call tools, return decisions
+# Cell 5 - Test B: full decide() call with live LLM
+# This is the real test - LLM will reason, call tools, return decisions
 
 print('Running live LLM decision for tick=5...')
 print('(expect tool calls to get_pending_orders, get_supplier_info, etc.)')
@@ -200,7 +200,7 @@ for d in decisions:
 # COMMAND ----------
 
 # COMMAND ----------
-# Cell 6 — Test C: verify audit log was written
+# Cell 6 - Test C: verify audit log was written
 # item_A should appear in hist_reorder_decisions for tick=5
 
 audit = spark.sql("""
@@ -223,7 +223,7 @@ print(f'✓ Test C passed: {row_count} audit row(s) written to hist_reorder_deci
 # COMMAND ----------
 
 # COMMAND ----------
-# Cell 7 — Test D: check escalation queue (may be empty — that is fine)
+# Cell 7 - Test D: check escalation queue (may be empty - that is fine)
 
 esc = spark.sql("""
     SELECT sim_id, tick, item_id, reason, status, raised_at
@@ -238,6 +238,6 @@ esc.show(truncate=80)
 
 esc_count = esc.count()
 if esc_count == 0:
-    print('✓ Test D: no escalations (expected — mock context has budget headroom)')
+    print('✓ Test D: no escalations (expected - mock context has budget headroom)')
 else:
     print(f'✓ Test D: {esc_count} escalation(s) raised and written correctly')

@@ -1145,11 +1145,11 @@ _record("T6.queue_ticks", "Queue contains messages for ticks 3, 4, 5 (newest 3)"
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Spark tests — world setup
+# MAGIC ## Spark tests - world setup
 # MAGIC
 # MAGIC Tests 7 and 8 require env tables to be populated before the runner can be called.
 # MAGIC This cell builds a minimal `SimWorld` programmatically and writes it to the env tables
-# MAGIC using `write_world` — the same pattern used in the simulation's own test notebooks.
+# MAGIC using `write_world` - the same pattern used in the simulation's own test notebooks.
 # MAGIC
 # MAGIC **World spec (shared across T7 and T8)**:
 # MAGIC - 2 items (`item_a`, `item_b`), 1 supplier (`sup_001`), 1 consumer (`con_001`)
@@ -1159,24 +1159,24 @@ _record("T6.queue_ticks", "Queue contains messages for ticks 3, 4, 5 (newest 3)"
 # MAGIC - No disruptions
 # MAGIC
 # MAGIC Three sim_ids are written:
-# MAGIC - `test_llm_agent_wrapper_resilience_001` — used by T7
-# MAGIC - `test_llm_agent_wrapper_repro_001` — used by T8 (run A)
-# MAGIC - `test_llm_agent_wrapper_repro_002` — used by T8 (run B, identical config to repro_001)
+# MAGIC - `test_llm_agent_wrapper_resilience_001` - used by T7
+# MAGIC - `test_llm_agent_wrapper_repro_001` - used by T8 (run A)
+# MAGIC - `test_llm_agent_wrapper_repro_002` - used by T8 (run B, identical config to repro_001)
 # MAGIC
 # MAGIC The cell is idempotent: `write_world` uses `IF NOT EXISTS` semantics on the env tables,
 # MAGIC so re-running the notebook does not duplicate rows.
 # MAGIC
 # MAGIC **Key design choices and rationale**:
-# MAGIC - `lead_time_variability=0.0` — deterministic lead time is required for T8. Any variability
+# MAGIC - `lead_time_variability=0.0` - deterministic lead time is required for T8. Any variability
 # MAGIC   would mean the two repro runs diverge on lead time RNG draws even with the same seed,
 # MAGIC   because the executor thread dispatches asynchronously and draw order is not guaranteed
 # MAGIC   to be identical between runs.
-# MAGIC - `random_seed=42` shared across all three sim_ids — repro_001 and repro_002 must have
+# MAGIC - `random_seed=42` shared across all three sim_ids - repro_001 and repro_002 must have
 # MAGIC   identical configs (only `sim_id` differs) for the T8 reproducibility assertion to be
 # MAGIC   meaningful. A different seed per run would trivially produce different decisions.
-# MAGIC - `num_ticks=10` — short enough for the Spark tests to run quickly; long enough for the
+# MAGIC - `num_ticks=10` - short enough for the Spark tests to run quickly; long enough for the
 # MAGIC   executor to fire at least once at `executor_trigger_every_n_ticks=5`.
-# MAGIC - `disruptions=[]` — no disruptions keeps the world fully deterministic and the assertions
+# MAGIC - `disruptions=[]` - no disruptions keeps the world fully deterministic and the assertions
 # MAGIC   clean. Disruption stochasticity would add RNG draws that could mask reproducibility failures.
 
 # COMMAND ----------
@@ -1263,7 +1263,7 @@ _CONSUMER_ITEM_MAP = {"item_a": "con_001", "item_b": "con_001"}
 def _make_demand_patterns(sim_id: str) -> dict:
     """
     One Poisson demand pattern per item, keyed by item_id.
-    SimWorld.demand_patterns is dict[str, Pattern] — one entry per item.
+    SimWorld.demand_patterns is dict[str, Pattern] - one entry per item.
 
     pattern_id is a stable deterministic string (not a uuid) so that
     re-running the setup cell does not create duplicate pattern rows
@@ -1294,7 +1294,7 @@ def _make_demand_patterns(sim_id: str) -> dict:
 def _make_test_sim_config(sim_id: str) -> SimConfig:
     """
     Build a SimConfig for the given sim_id.
-    All test runs share the same world definition and random seed — only
+    All test runs share the same world definition and random seed - only
     sim_id differs. This is what makes T8 a valid reproducibility test:
     two runs with identical configs must produce identical decisions.
 

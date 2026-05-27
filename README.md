@@ -18,7 +18,7 @@
 | **Resource** | `Link` |
 | --- | --- |
 | Warehouse simulation package | [`warehouse_sim`](./warehouse_sim/) |
-| Toy simulation package | [`toy_sim`](./toy_sim/) |
+| Test LLM-Based Reorder Agent | [`test_llm_reorder_agent`](./test_llm_reorder_agent/) |
 | Devlog | [`devlog.md`](./devlog.md) |
 | Data store definition | [`_dataStoreDefinition`](./_dataStoreDefinition/) |
 | Test notebooks | [`_testNotebooks`](./_testNotebooks/) |

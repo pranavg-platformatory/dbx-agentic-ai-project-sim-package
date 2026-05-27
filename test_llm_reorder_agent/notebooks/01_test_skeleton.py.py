@@ -9,14 +9,14 @@ print(yaml.__version__)
 
 # COMMAND ----------
 # MAGIC %md
-# MAGIC # Task 1 — LLM Agent Skeleton Verification
+# MAGIC # Task 1 - LLM Agent Skeleton Verification
 # MAGIC Tests the standalone agent with no simulator dependency and no LLM calls.
 
 # COMMAND ----------
-# Cell 1 — path setup and import
+# Cell 1 - path setup and import
 
 import sys
-sys.path.insert(0, '/Workspace/Shared/reorder-llm-agent')
+sys.path.insert(0, '/Workspacetest_llm_reorder_agent')
 
 # Verify pyyaml is available
 import yaml
@@ -46,7 +46,7 @@ print('✓ Test A passed: config loaded correctly')
 # COMMAND ----------
 
 # COMMAND ----------
-# Cell 3 — Build mock AgentContext (no Spark, no Delta)
+# Cell 3 - Build mock AgentContext (no Spark, no Delta)
 
 mock_context = AgentContext(
     sim_id = 'test_sim_001',

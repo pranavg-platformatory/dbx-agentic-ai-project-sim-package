@@ -37,7 +37,7 @@ resources:
   experiments:
     llm_reorder_agent_experiment:
       name: >-
-        /Shared/reorder-llm-agent/experiments/llm_reorder_agent
+        test_llm_reorder_agent/experiments/llm_reorder_agent
       permissions:
         - level: CAN_READ
           group_name: users

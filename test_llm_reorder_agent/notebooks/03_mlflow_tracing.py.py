@@ -3,12 +3,12 @@
 
 # COMMAND ----------
 # MAGIC %md
-# MAGIC # Task 4 — MLflow Autolog + Tracing Verification
+# MAGIC # Task 4 - MLflow Autolog + Tracing Verification
 # MAGIC Confirms that every LLM call, tool invocation, and decision
 # MAGIC is automatically traced in MLflow per tick.
 
 # COMMAND ----------
-# Cell 1 — install dependencies (skip if already done in this session)
+# Cell 1 - install dependencies (skip if already done in this session)
 
 %pip install databricks-langchain langgraph langchain-core mlflow
 
@@ -18,12 +18,12 @@ dbutils.library.restartPython()
 
 # COMMAND ----------
 
-# Cell 2 — clear cache and setup
+# Cell 2 - clear cache and setup
 import sys
 import shutil
 import os
 
-cache_dir = '/Workspace/Shared/reorder-llm-agent/__pycache__'
+cache_dir = 'test_llm_reorder_agent/__pycache__'
 if os.path.exists(cache_dir):
     shutil.rmtree(cache_dir)
     print('✓ cache cleared')
@@ -33,7 +33,7 @@ for mod in ['llm_agent', 'uc_tools', 'base']:
     if mod in sys.modules:
         del sys.modules[mod]
 
-sys.path.insert(0, '/Workspace/Shared/reorder-llm-agent')
+sys.path.insert(0, '/Workspacetest_llm_reorder_agent')
 
 import mlflow
 from llm_agent import LLMReorderAgent, serialise_context
@@ -127,7 +127,7 @@ print('✓ mock context built for tick=10')
 # COMMAND ----------
 
 # COMMAND ----------
-# Cell 4 — Test A: agent initialises with MLflow autolog enabled
+# Cell 4 - Test A: agent initialises with MLflow autolog enabled
 
 agent = LLMReorderAgent()
 
@@ -135,7 +135,7 @@ assert agent._graph is not None, 'graph should be compiled'
 
 # Verify experiment was set
 experiment = mlflow.get_experiment_by_name(
-    '/Shared/reorder-llm-agent/experiments/llm_reorder_agent'
+    'test_llm_reorder_agent/experiments/llm_reorder_agent'
 )
 assert experiment is not None, \
     'MLflow experiment should exist after LLMReorderAgent.__init__'
@@ -147,7 +147,7 @@ print(f'  experiment    : {experiment.name}')
 # COMMAND ----------
 
 # COMMAND ----------
-# Cell 5 — Test B: run decide() and verify a run was created
+# Cell 5 - Test B: run decide() and verify a run was created
 
 # Wrap in a parent run so the tick run is nested cleanly
 with mlflow.start_run(run_name='task4_verification_parent') as parent_run:
@@ -165,7 +165,7 @@ print('✓ Test B passed: decisions returned correctly')
 # COMMAND ----------
 
 # COMMAND ----------
-# Cell 6 — Test C: verify child run was logged with correct tags and metrics
+# Cell 6 - Test C: verify child run was logged with correct tags and metrics
 
 import mlflow
 from mlflow.tracking import MlflowClient
@@ -220,7 +220,7 @@ print('✓ Test C passed: child run has correct tags and metrics')
 # COMMAND ----------
 
 # COMMAND ----------
-# Cell 7 — Test D: verify autolog captured LangChain traces
+# Cell 7 - Test D: verify autolog captured LangChain traces
 # These appear as child spans inside the run automatically
 
 runs = client.search_runs(
@@ -248,13 +248,13 @@ try:
     print('✓ Test D passed: MLflow traces captured')
 except Exception as e:
     print(f'  Note: trace search not available in this MLflow version ({e})')
-    print('  Check Experiments UI manually — traces appear under the run')
+    print('  Check Experiments UI manually - traces appear under the run')
     print('✓ Test D: skipped (check UI manually)')
 
 # COMMAND ----------
 
 # COMMAND ----------
-# Cell 8 — print experiment URL for manual UI verification
+# Cell 8 - print experiment URL for manual UI verification
 
 workspace_url = spark.conf.get('spark.databricks.workspaceUrl', '')
 exp_id = experiment.experiment_id
@@ -267,4 +267,4 @@ print('  1. A run named task4_verification_parent')
 print('  2. A nested child run named tick_10_sim_stage4_001')
 print('  3. Tags: sim_id, tick, agent_version, n_items')
 print('  4. Metrics: n_reorders, n_holds, total_order_qty')
-print('  5. Traces tab — LangGraph steps and tool calls listed as spans')
+print('  5. Traces tab - LangGraph steps and tool calls listed as spans')

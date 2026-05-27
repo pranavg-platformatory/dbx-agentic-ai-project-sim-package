@@ -3,7 +3,7 @@
 
 # COMMAND ----------
 # MAGIC %md
-# MAGIC # Task 5 — Driver: Log → Evaluate → Register → Deploy
+# MAGIC # Task 5 - Driver: Log → Evaluate → Register → Deploy
 # MAGIC
 # MAGIC Follows the Investment Assistant driver.py pattern exactly.
 # MAGIC
@@ -16,7 +16,7 @@
 # MAGIC 6. Deploy to Model Serving endpoint
 
 # COMMAND ----------
-# Cell 1 — install dependencies
+# Cell 1 - install dependencies
 
 %pip install databricks-langchain langgraph langchain-core mlflow databricks-agents
 
@@ -26,7 +26,7 @@ dbutils.library.restartPython()
 
 # COMMAND ----------
 
-# Cell 2 — imports and setup
+# Cell 2 - imports and setup
 
 import sys
 import os
@@ -35,7 +35,7 @@ import json
 import pandas as pd        # ← add this line
 
 # Clear stale bytecode
-cache_dir = '/Workspace/Shared/reorder-llm-agent/__pycache__'
+cache_dir = 'test_llm_reorder_agent/__pycache__'
 if os.path.exists(cache_dir):
     shutil.rmtree(cache_dir)
 
@@ -44,7 +44,7 @@ for mod in ['llm_agent', 'uc_tools', 'base']:
     if mod in sys.modules:
         del sys.modules[mod]
 
-sys.path.insert(0, '/Workspace/Shared/reorder-llm-agent')
+sys.path.insert(0, '/Workspacetest_llm_reorder_agent')
 
 import mlflow
 import mlflow.langchain
@@ -57,7 +57,7 @@ from base import (
     ActiveDisruption, CostSnapshot,
 )
 
-EXPERIMENT_NAME  = '/Shared/reorder-llm-agent/experiments/llm_reorder_agent'
+EXPERIMENT_NAME  = 'test_llm_reorder_agent/experiments/llm_reorder_agent'
 UC_MODEL_NAME    = 'hackathon_of_the_century.agent_tools.llm_reorder_agent'
 AGENT_VERSION    = 'llm_reorder_agent_v1'
 
@@ -73,15 +73,15 @@ print(f'UC model       : {UC_MODEL_NAME}')
 
 # # COMMAND ----------
 # # MAGIC %md
-# # MAGIC ## Step 1 — Log the agent as an MLflow model
+# # MAGIC ## Step 1 - Log the agent as an MLflow model
 
 # # COMMAND ----------
-# # Cell 3 — define the agent as a PyFunc model wrapper for MLflow logging
+# # Cell 3 - define the agent as a PyFunc model wrapper for MLflow logging
 # #
 # # MLflow needs a pyfunc model to log and serve the agent.
 # # The wrapper translates the MLflow predict() interface
 # # (which receives a DataFrame or dict) into AgentContext
-# # and calls agent.decide() — keeping the agent code unchanged.
+# # and calls agent.decide() - keeping the agent code unchanged.
 
 # import pandas as pd
 # import json
@@ -101,7 +101,7 @@ print(f'UC model       : {UC_MODEL_NAME}')
 #     def load_context(self, context):
 #         '''Called once when the model is loaded for serving.'''
 #         import sys
-#         sys.path.insert(0, '/Workspace/Shared/reorder-llm-agent')
+#         sys.path.insert(0, '/Workspacetest_llm_reorder_agent')
 #         from llm_agent import LLMReorderAgent
 #         self.agent = LLMReorderAgent()
 
@@ -193,7 +193,7 @@ print(f'UC model       : {UC_MODEL_NAME}')
 # COMMAND ----------
 
 # DBTITLE 1,Cell 5
-# Cell 4 — log the agent using code-based logging (MLflow 3.x)
+# Cell 4 - log the agent using code-based logging (MLflow 3.x)
 
 import json
 import shutil
@@ -220,7 +220,7 @@ FILES_TO_STAGE = [
 ]
 
 for fname in FILES_TO_STAGE:
-    src = f'/Workspace/Shared/reorder-llm-agent/{fname}'
+    src = f'test_llm_reorder_agent/{fname}'
     dst = f'{STAGING_DIR}/{fname}'
     shutil.copy2(src, dst)
     print(f'  staged: {fname}')
@@ -279,16 +279,16 @@ print(f'  model_uri : {logged_model_uri}')
 
 # COMMAND ----------
 # MAGIC %md
-# MAGIC ## Step 2 — Build evaluation dataset
+# MAGIC ## Step 2 - Build evaluation dataset
 
 # COMMAND ----------
-# Cell 5 — define evaluation scenarios
+# Cell 5 - define evaluation scenarios
 #
 # Four representative scenarios covering the key decision branches:
-# 1. Healthy stock — expect HOLD
-# 2. Imminent stockout — expect REORDER max qty
-# 3. Transit delay disruption — expect REORDER with inflated qty
-# 4. Pending order already covers need — expect HOLD
+# 1. Healthy stock - expect HOLD
+# 2. Imminent stockout - expect REORDER max qty
+# 3. Transit delay disruption - expect REORDER with inflated qty
+# 4. Pending order already covers need - expect HOLD
 
 import json
 
@@ -425,8 +425,8 @@ for s in eval_scenarios:
 
 # COMMAND ----------
 
-# Cell 6 — run agent against each scenario and score
-# Calls LLMReorderAgent directly — no wrapper needed for local eval
+# Cell 6 - run agent against each scenario and score
+# Calls LLMReorderAgent directly - no wrapper needed for local eval
 
 from base import (
     AgentContext, ItemState, PendingOrder,
@@ -551,7 +551,7 @@ print(f'  Pass rate : {pass_rate:.0%}')
 # COMMAND ----------
 
 # COMMAND ----------
-# Cell 7 — log evaluation results to MLflow
+# Cell 7 - log evaluation results to MLflow
 
 with mlflow.start_run(run_id=logged_run_id):
     mlflow.log_metric('eval_pass_rate',   pass_rate)
@@ -572,10 +572,10 @@ display(results_df[['scenario', 'expected_decision', 'actual_decision', 'correct
 
 # COMMAND ----------
 # MAGIC %md
-# MAGIC ## Step 4 — Register to Unity Catalog (if evaluation passes)
+# MAGIC ## Step 4 - Register to Unity Catalog (if evaluation passes)
 
 # COMMAND ----------
-# Cell 8 — register model to Unity Catalog
+# Cell 8 - register model to Unity Catalog
 #
 # Only proceeds if pass rate >= 75%.
 # Mirrors the Investment Assistant pattern:
@@ -630,8 +630,8 @@ else:
 
 # COMMAND ----------
 
-# Cell 9 — deploy using Databricks SDK (not agents.deploy())
-# agents.deploy() requires ChatCompletionRequest schema — ours is a
+# Cell 9 - deploy using Databricks SDK (not agents.deploy())
+# agents.deploy() requires ChatCompletionRequest schema - ours is a
 # custom payload schema, so we use the standard serving endpoint API.
 
 from databricks.sdk import WorkspaceClient
@@ -651,7 +651,7 @@ w = WorkspaceClient()
 existing = None
 try:
     existing = w.serving_endpoints.get(SERVING_ENDPOINT)
-    print(f'Endpoint {SERVING_ENDPOINT} already exists — updating...')
+    print(f'Endpoint {SERVING_ENDPOINT} already exists - updating...')
 except Exception:
     print(f'Creating new endpoint: {SERVING_ENDPOINT}')
 
@@ -697,7 +697,7 @@ print(f'Check at: Serving → Endpoints → {SERVING_ENDPOINT}')
 # COMMAND ----------
 
 # COMMAND ----------
-# Cell 10 — verify the registered model in UC
+# Cell 10 - verify the registered model in UC
 
 print('── Registered model in Unity Catalog ──────────────────')
 versions = client.search_model_versions(f"name='{UC_MODEL_NAME}'")

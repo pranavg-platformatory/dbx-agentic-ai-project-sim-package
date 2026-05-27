@@ -79,6 +79,11 @@ EVENT_TYPES = frozenset({
     "COST_ACCRUED",
     "TRANSIT_LOSS_APPLIED",
     "LEAD_TIME_EXTENDED",
+    # LLMAgentWrapper-related event types
+    "AGENT_ERROR",
+    "EXECUTOR_ALL_STALE",
+    "FALLBACK_STRUCTURAL",
+    "FALLBACK_LOGICAL"
 })
 
 

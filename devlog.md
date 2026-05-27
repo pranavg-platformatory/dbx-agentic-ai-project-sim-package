@@ -4,32 +4,33 @@
 
 **Contents**:
 
-- [Coupling between Stages](#coupling-between-stages)
-- [Stage 1: `config`](#stage-1-config)
-  - [Pre-Development Notes](#pre-development-notes)
-  - [Post-Development Notes](#post-development-notes)
-- [Stage 2 \& 3: `world`](#stage-2--3-world)
-  - [Why Stages 2 \& 3 Have Been Merged](#why-stages-2--3-have-been-merged)
-  - [Pre-Development Notes](#pre-development-notes-1)
-  - [Development Notes](#development-notes)
-  - [Post-Development Notes](#post-development-notes-1)
-- [Stage 5: `event_log`](#stage-5-event_log)
-  - [Pre-Development Notes](#pre-development-notes-2)
-  - [Post-Development Notes](#post-development-notes-2)
-- [Stage 6: `agent` (*only thin implementation*)](#stage-6-agent-only-thin-implementation)
+- [Core Simulation Development](#core-simulation-development)
+  - [Coupling between Stages](#coupling-between-stages)
+  - [Stage 1: `config`](#stage-1-config)
+    - [Pre-Development Notes](#pre-development-notes)
+    - [Post-Development Notes](#post-development-notes)
+  - [Stage 2 \& 3: `world`](#stage-2--3-world)
+    - [Why Stages 2 \& 3 Have Been Merged](#why-stages-2--3-have-been-merged)
+    - [Pre-Development Notes](#pre-development-notes-1)
+    - [Development Notes](#development-notes)
+    - [Post-Development Notes](#post-development-notes-1)
+  - [Stage 5: `event_log`](#stage-5-event_log)
+    - [Pre-Development Notes](#pre-development-notes-2)
+    - [Post-Development Notes](#post-development-notes-2)
+  - [Stage 6: `agent` (*only thin implementation*)](#stage-6-agent-only-thin-implementation)
   - [Pre-Development Notes](#pre-development-notes-3)
-  - [Post-Development](#post-development)
-- [Stage 4: `engine`](#stage-4-engine)
-  - [Pre-Development Notes](#pre-development-notes-4)
-  - [Development Notes before `runner.py`](#development-notes-before-runnerpy)
-  - [Development Notes for `runner.py`](#development-notes-for-runnerpy)
-- [Stage 7: `viz`](#stage-7-viz)
-  - [Pre-Development Notes](#pre-development-notes-5)
-    - [Why Skip the `RuleBasedAgent` for Stage 6 for Now?](#why-skip-the-rulebasedagent-for-stage-6-for-now)
-    - [Overview for Stage 7](#overview-for-stage-7)
-  - [Post-Development Notes](#post-development-notes-3)
-    - [Key Points](#key-points)
-    - [Completion Status](#completion-status)
+    - [Post-Development](#post-development)
+  - [Stage 4: `engine`](#stage-4-engine)
+    - [Pre-Development Notes](#pre-development-notes-4)
+    - [Development Notes before `runner.py`](#development-notes-before-runnerpy)
+    - [Development Notes for `runner.py`](#development-notes-for-runnerpy)
+  - [Stage 7: `viz`](#stage-7-viz)
+    - [Pre-Development Notes](#pre-development-notes-5)
+      - [Why Skip the `RuleBasedAgent` for Stage 6 for Now?](#why-skip-the-rulebasedagent-for-stage-6-for-now)
+      - [Overview for Stage 7](#overview-for-stage-7)
+    - [Post-Development Notes](#post-development-notes-3)
+      - [Key Points](#key-points)
+      - [Completion Status](#completion-status)
 - [LLMAgentWrapper: LLM Agent Integration](#llmagentwrapper-llm-agent-integration)
   - [Pre-Development Notes](#pre-development-notes-6)
   - [Development Notes](#development-notes-1)
@@ -67,7 +68,8 @@
  
 ---
 
-# Coupling between Stages
+# Core Simulation Development
+## Coupling between Stages
 
 ```
 infraLayer  ──────────────────────────────►  coreEngine
@@ -87,25 +89,25 @@ TL;DR:
 
 ***We can write and test all of `infraLayer` stages (1, 2, 3, and 5) in complete isolation, with no stubs or mocks needed for the engine or agent. Stage 7 similarly just needs populated tables to query.***
 
-# Stage 1: `config`
+## Stage 1: `config`
 [`warehouse_sim/config`](./warehouse_sim/config/)
 
-## Pre-Development Notes
+### Pre-Development Notes
 This stage is the typed backbone of the entire package. Every entity in the schema - `SimConfig`, `ItemType`, `Supplier`, `Consumer`, `Pattern`, `DisruptionSchedule`, `SimWorld` - [exists as a validated Pydantic model](./README.md#pydantic). All enums are defined. Cross-field validation is enforced at construction time (e.g. `max_order_qty >= min_order_qty`, `num_ticks` required for finite runs, transit_loss magnitude clamped to `[0,1]`).
 
 `loader.py` reads all env tables from Databricks for a given `sim_id` and assembles a `SimWorld`, the single typed object the engine will receive at startup. It also validates cross-table consistency (duplicate mappings, missing demand patterns, unknown supplier/consumer IDs).
 
-## Post-Development Notes
+### Post-Development Notes
 A few things worth noting before we move on:
 
 - `loader.py` is the only file in this stage with a Spark dependency; everything else is pure Python. In Databricks, `load_world(spark, sim_id)` is the single entry point; it returns a `SimWorld` and the engine never touches Spark directly after that.
 - `SimWorld` is not a DB table, it is an in-memory convenience container assembled at startup. The `supplier_for()`, `consumer_for()`, and `disruptions_for_tick()` helpers are what the engine will call constantly, so keeping them on the world object avoids repeated dict lookups scattered around the codebase.
 - The `loader.py` cross-reference validation (unknown supplier IDs, missing demand patterns, duplicate mappings) means any misconfigured env table setup fails fast at load time, not mid-simulation.
 
-# Stage 2 & 3: `world`
+## Stage 2 & 3: `world`
 [`warehouse_sim/world`](./warehouse_sim/world/)
 
-## Why Stages 2 & 3 Have Been Merged
+### Why Stages 2 & 3 Have Been Merged
 The original plan separated them as:
 
 - Stage 2: world setup & env table population (`setup.py`)
@@ -127,7 +129,7 @@ TL;DR:
 
 ***Pattern definition is part of world definition. You cannot have a valid simulated world without knowing how demand will be drawn.***
 
-## Pre-Development Notes
+### Pre-Development Notes
 Stage 2 sits directly on top of Stage 1 and does one thing: takes a SimWorld object and writes it into the Databricks env tables. It's the mirror image of loader.py - where the loader reads env tables into typed models, setup.py writes typed models into env tables.
 
 ```
@@ -145,7 +147,7 @@ Concretely:
 - `patterns.py` takes a Pattern model (from Stage 1) and a tick number, and returns a sampled float demand/supply value; this is the sampling logic the engine will call every tick in Stage 4
 - Neither file knows anything about the engine or the agent; they only depend on Stage 1 models
 
-## Development Notes
+### Development Notes
 Changed [`warehouse_sim/world/setup.py`](./warehouse_sim/world/setup.py):
 
 - Old version: [`warehouse_sim/world/__recycle_bin__/setup.py`](./warehouse_sim/world/__recycle_bin__/setup.py)
@@ -155,7 +157,7 @@ Changed [`warehouse_sim/world/setup.py`](./warehouse_sim/world/setup.py):
 
 These prevent PySpark from inferring long instead of int, missing nullability on arrays, or ambiguous boolean/double types - same class of issues seen in the Stage 1 notebook when using `createDataFrame` without a schema.
 
-## Post-Development Notes
+### Post-Development Notes
 
 Completion:
 
@@ -168,10 +170,10 @@ Completion:
   Stage 7   - Full integration + visualisation
 ```
 
-# Stage 5: `event_log`
+## Stage 5: `event_log`
 [`warehouse_sim/event_log`](./warehouse_sim/event_log/)
 
-## Pre-Development Notes
+### Pre-Development Notes
 **What `event_log` is**:
 
 A pure write utility. logging/event_log.py receives structured event data from the engine and appends a row to event_log in Databricks. It has no awareness of simulation logic, it just knows how to serialise and write events correctly.
@@ -203,7 +205,7 @@ A pure write utility. logging/event_log.py receives structured event data from t
 - Actual writes to `event_log`
 - Row counts, ordering, payload field presence per event type
 
-## Post-Development Notes
+### Post-Development Notes
 Completion:
 
 ```
@@ -215,7 +217,7 @@ Completion:
   Stage 7   - Full integration + visualisation
 ```
 
-# Stage 6: `agent` (*only thin implementation*)
+## Stage 6: `agent` (*only thin implementation*)
 [`warehouse_sim/agent`](./warehouse_sim/agent/) (only `base.py`)
 
 ## Pre-Development Notes
@@ -257,7 +259,7 @@ engine/costs.py
 
 `agent/base.py` needs to exist before `runner.py` is written, because the runner's type hints reference `BaseAgent`, `AgentContext`, and `ReorderDecision`. But `agent/rule_based.py` can wait until after stage 4.
 
-## Post-Development
+### Post-Development
 Create 3 modules:
 
 - `warehouse_simagent/base.py`
@@ -265,8 +267,10 @@ Create 3 modules:
 - `warehouse_simagent/reoder_agent.py`
 
 
-# Stage 4: `engine`
-## Pre-Development Notes
+## Stage 4: `engine`
+
+### Pre-Development Notes
+
 **What `engine` is**:
 
 The engine is the simulation loop. It owns the tick-by-tick orchestration - calling the right sub-modules in the right order, reading and writing the operational tables, and invoking the agent. Everything built in stages 1-3 feeds into it.
@@ -312,7 +316,8 @@ sub-step 6   event_log        COST_ACCRUED, tick-level events already fired inli
 - Agent is injected. `runner.py` takes a `BaseAgent` instance as a parameter - it calls `agent.decide(context)` at sub-step 4. The agent is never imported directly by the engine; it's passed in from outside.
 - Event logger is injected too. The `EventLogger` instance is passed into the runner at startup, same pattern.
 
-## Development Notes before `runner.py`
+### Development Notes before `runner.py`
+
 **What has been built**:
 
 - `agent/base.py` - the contract layer. Three frozen dataclasses (`AgentContext`, `ItemState`, `ReorderDecision` etc.) and the `BaseAgent` abstract class with the single decide method. This is the boundary between the engine and any agent implementation - the engine knows only this interface, never a concrete agent.
@@ -344,14 +349,14 @@ for each tick:
     fire TICK_ENDED
 ```
 
-## Development Notes for `runner.py`
+### Development Notes for `runner.py`
 Just an orchestrator for the simulation.
 
-# Stage 7: `viz`
+## Stage 7: `viz`
 [`warehouse_sim/viz`](./warehouse_sim/viz/)
 
-## Pre-Development Notes
-### Why Skip the `RuleBasedAgent` for Stage 6 for Now?
+### Pre-Development Notes
+#### Why Skip the `RuleBasedAgent` for Stage 6 for Now?
 The `RuleBasedAgent` is functionally the least essential at this point because:
 
 - The notebook to test stage 4 already defines two inline agents (`HoldAgent`, `ReorderAgent`) (which shall be added to the `warehouse_sim/agent` sub-package) that are sufficient to drive and test the engine end-to-end
@@ -363,7 +368,8 @@ The one thing stage 6 does add is a reusable, importable `RuleBasedAgent` that l
 
 ***So the right call is: do Stage 7 now, come back to Stage 6 when you're ready to build the LLM agent and need a clean baseline to compare it against.***
 
-### Overview for Stage 7
+#### Overview for Stage 7
+
 Stage 7 is viz/dashboard.py - it reads purely from `hist_*` and `ops_*` tables and produces charts. No engine, no agent, no Spark writes. The key views to build:
 
 ```
@@ -377,14 +383,15 @@ Stage 7 is viz/dashboard.py - it reads purely from `hist_*` and `ops_*` tables a
 
 The output will be a Databricks notebook that pulls these views and renders them with `matplotlib` or `pandas` - clean enough to present as a PoC dashboard.
 
-## Post-Development Notes
-### Key Points
+### Post-Development Notes
+
+#### Key Points
 - `SimDashboard` is lazy-loading. Each property (stock, demand, cost_by_tick etc.) hits Spark only once and caches the result as a pandas DataFrame. Calling `plot_all()` `after print_summary()` doesn't re-query the tables.
 - Disruption shading is automatic. Any chart that's per-item will shade ticks where `ops_active_disruptions.is_active_this_tick = true` in translucent red. This means the demand spike at ticks 4-6 in the stage 4 toy world will be visually obvious without any manual annotation.
 - The notebook is pointed at `sim_stage4_001` by default - the run the stage 4 test notebook produces. Changing `SIM_ID` at the top of the stage 7 test notebook is all that's needed to inspect any other run.
 - Section 12 in the stage 7 test notebook has three meaningful assertions beyond "does it render" - the cost consistency check (`hist_cost_by_tick sum = ops_cost_accumulator` final cumulative), the demand integrity check (`fulfilled + unmet = floor(disrupted_demand)`), and the event log completeness check. These turn the dashboard notebook into a lightweight audit as well as a visual tool.
 
-### Completion Status
+#### Completion Status
 
 ```
 ✓ Stage 1   - Data models & config loader
@@ -395,6 +402,7 @@ The output will be a Databricks notebook that pulls these views and renders them
   Stage 6   - Rule-based agent <- deferred
 ✓ Stage 7   - Full integration + visualisation
 ```
+
 # LLMAgentWrapper: LLM Agent Integration
 - [`warehouse_sim/agent`](./warehouse_sim/agent/)
     - `llm_agent_wrapper_types.py`

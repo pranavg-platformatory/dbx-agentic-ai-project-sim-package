@@ -74,7 +74,7 @@ Append-only summaries that accumulate across ticks. Used for agent context and o
 
 # Schema: `agent_tools` - LLM Agent UC Functions and Tables
 
-This schema is **not part of the simulation engine**. It is owned and populated by the LLM agent (the test codebase for this agent is stored in the directory [`test_reorder_llm_agent`](../test_reorder_llm_agent/)), specifically via [`test_reorder_llm_agent/notebooks/UC_Functions.py`](../test_reorder_llm_agent/notebooks/UC_Functions.py). It is documented here because its tables interact with the simulation's data store and the full catalog layout should be visible in one place.
+This schema is **not part of the simulation engine**. It is owned and populated by LLM agent as defined in Her Majesty Reshma the Boss's LLM agent codebase ([`test_reorder_llm_agent`](../test_reorder_llm_agent/)), specifically via [`test_reorder_llm_agent/notebooks/UC_Functions.py`](../test_reorder_llm_agent/notebooks/UC_Functions.py). It is documented here because its tables interact with the simulation's data store and the full catalog layout should be visible in one place.
 
 | Object | Type | Description |
 |---|---|---|

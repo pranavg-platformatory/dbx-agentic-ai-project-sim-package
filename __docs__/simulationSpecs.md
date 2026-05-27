@@ -35,6 +35,7 @@
   - [`ops_pending_orders`](#ops_pending_orders)
   - [`ops_cost_accumulator`](#ops_cost_accumulator)
   - [`ops_active_disruptions`](#ops_active_disruptions)
+  - [`ops_escalation_queue`](#ops_escalation_queue)
 - [6. Historical Data Tables](#6-historical-data-tables)
   - [`hist_demand_actuals`](#hist_demand_actuals)
   - [`hist_supply_arrivals`](#hist_supply_arrivals)
@@ -539,6 +540,32 @@ Disruptions currently in effect at the current tick.
 | `disruption_type` | enum | Type of disruption |
 | `effective_magnitude` | float | Actual magnitude applied this tick (may differ from scheduled if stochastic) |
 | `is_active_this_tick` | boolean | Whether stochastic disruption triggered this tick |
+
+## `ops_escalation_queue`
+
+> **Origin**: Introduced by Her Majesty Reshma the Boss's LLM agent codebase [`test_reorder_llm_agent`](../test_reorder_llm_agent/). Not part of the original simulation specification. Added to this spec as a record of the interface boundary between the autonomous agent layer and the human operations layer.
+
+Human-review queue written by the LLM agent when it encounters a situation it cannot resolve autonomously. This table is **not written by the simulation engine or the rule-based agent** — it is written exclusively by the `LLMReorderAgent` via the `escalate_item` UC function (`hackathon_of_the_century.agent_tools.escalate_item`).
+
+When escalating, the agent simultaneously returns a HOLD decision for the affected item via `decide()`, so the simulation tick completes normally. The escalation is a side-channel notification, not a halt.
+
+**Escalation conditions** (as defined in the LLM agent's system prompt):
+- `BUDGET_BREACH`: a reorder is needed but its order cost would exceed the remaining budget
+- `STOCKOUT_IMMINENT`: stockout will occur within 1 tick and no pending order can arrive in time
+- `NO_SUPPLIER`: no supplier information is available for the item
+- `OTHER`: any other situation the agent judges to require human review
+
+**Mutable status field**: Unlike all other operational tables, this table is not append-only at the row level. The `status` field is updated from `OPEN` to `REVIEWED` by a human operator after review. The simulation engine never writes to or reads from this table.
+
+| Column | Type | Description |
+|---|---|---|
+| `sim_id` | string FK | Simulation run |
+| `tick` | integer | Tick at which the escalation was raised |
+| `item_id` | string FK | Item that triggered the escalation |
+| `reason` | enum | `BUDGET_BREACH`, `NO_SUPPLIER`, `STOCKOUT_IMMINENT`, `OTHER` |
+| `context_json` | string | JSON snapshot of the relevant AgentContext fields at escalation time |
+| `status` | enum | `OPEN` (awaiting review) or `REVIEWED` (human has acted) |
+| `raised_at` | timestamp | Wall-clock time the escalation was written |
 
 # 6. Historical Data Tables
 

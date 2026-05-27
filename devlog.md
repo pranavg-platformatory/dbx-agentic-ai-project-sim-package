@@ -576,7 +576,7 @@ LLMAgentWrapper:
 
 ## Origin
 
-`ops_escalation_queue` was introduced by the LLM agent (for viewing the test codebase for this agent, see: [`test_reorder_llm_agent`](./test_reorder_llm_agent/)), defined in [`test_reorder_llm_agent/notebooks/UC_Functions.py`](./test_reorder_llm_agent/notebooks/UC_Functions.py). It was not part of the original simulation specification. It is documented here because it lives in the simulation's catalog (`hackathon_of_the_century.tables4ops`) and is a defined part of the interface between the two packages.
+`ops_escalation_queue` was introduced by Her Majesty Reshma the Boss's LLM agent codebase ([`test_reorder_llm_agent`](./test_reorder_llm_agent/)), defined in [`test_reorder_llm_agent/notebooks/UC_Functions.py`](./test_reorder_llm_agent/notebooks/UC_Functions.py). It was not part of the original simulation specification. It is documented here because it lives in the simulation's catalog (`hackathon_of_the_century.tables4ops`) and is a defined part of the interface between the two packages.
 
 ## What it is
 
@@ -609,6 +609,6 @@ The table DDL (`CREATE TABLE IF NOT EXISTS`) has been added to `setup4dataStore.
 
 ## What it is
 
-`hackathon_of_the_century.agent_tools` is the schema owned by e LLM agent (for viewing the test codebase for this agent, see: [`test_reorder_llm_agent`](./test_reorder_llm_agent/)). It holds the nine UC functions the `LLMReorderAgent` uses as LangChain tools, plus the registered MLflow model. Its contents are populated via [`test_reorder_llm_agent/notebooks/UC_Functions.py`](./test_reorder_llm_agent//notebooks/UC_Functions.py).
+`hackathon_of_the_century.agent_tools` is the schema owned by Her Majesty Reshma the Boss's LLM agent codebase ([`test_reorder_llm_agent`](./test_reorder_llm_agent/)). It holds the nine UC functions the `LLMReorderAgent` uses as LangChain tools, plus the registered MLflow model. Its contents are populated via [`test_reorder_llm_agent/notebooks/UC_Functions.py`](./test_reorder_llm_agent//notebooks/UC_Functions.py).
 
 It is declared in `setup4dataStore.py` so that running the setup notebook creates the full catalog layout in one shot, without requiring the agent package's notebook to be run first just to get the schema. The simulation engine has no dependency on anything inside this schema.

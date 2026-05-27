@@ -6,4 +6,4 @@
 
 ---
 
-This codebase was developed independently of any warehouse environment setup, as per considerations made in [`__docs__/reasoningIntegrationSpecs-4.md`](../__docs__/reasoningIntegrationSpecs-4.md).
+This codebase was developed by Her Majesty Reshma the Boss independently of any warehouse environment setup, as per considerations made in [`__docs__/reasoningIntegrationSpecs-4.md`](../__docs__/reasoningIntegrationSpecs-4.md).

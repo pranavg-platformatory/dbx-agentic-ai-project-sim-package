@@ -58,6 +58,12 @@
     - [Point 1 - Wiring `LLMReorderAgent` into `_run_executor`](#point-1---wiring-llmreorderagent-into-_run_executor)
     - [Point 3 - Duplicate writes to `hist_reorder_decisions`](#point-3---duplicate-writes-to-hist_reorder_decisions)
     - [Completion status update](#completion-status-update)
+  - [ISSUE (resolved): `hist_eval_metrics`: `item_id` NOT NULL Constraint](#issue-resolved-hist_eval_metrics-item_id-not-null-constraint)
+    - [Root cause](#root-cause)
+    - [Fix](#fix)
+- [Integration Tests](#integration-tests)
+- [IT1: Rule-Based vs. LLM Agent (Finite Ticks)](#it1-rule-based-vs-llm-agent-finite-ticks)
+  - [IT2: Continuous Simulation](#it2-continuous-simulation)
  
 ---
 
@@ -712,3 +718,68 @@ This requires no changes to Her Majesty Reshma the Boss's codebase. The LLM's sy
                            - _write_eval_metrics error handling
   Open (Her Majesty Reshma the Boss) - LangFuse trace structure
 ```
+
+## ISSUE (resolved): `hist_eval_metrics`: `item_id` NOT NULL Constraint
+
+**File changed**: [`warehouse_sim/agent/llm_agent_wrapper.py`](./warehouse_sim/agent/llm_agent_wrapper.py)
+
+### Root cause
+
+`_write_eval_metrics` writes one row per metric per tick. Item-level metrics (`stockout_rate`, `holding_cost_delta`, `stock_cover`) carry a real `item_id`. The run-level metric (`budget_utilisation`) was written with `item_id=None`, with `NULL` as the intended signal that a metric is run-level rather than item-level.
+
+This produced a `NOT NULL constraint violated for column: item_id` error on every tick. Two compounding causes:
+
+**Cause 1 - Spark DDL string parser**: `_EVAL_METRICS_SCHEMA` was originally a DDL string (`"sim_id STRING, tick INT, item_id STRING, ..."`). Spark's DDL string parser marks every column `NOT NULL` by default. This meant `createDataFrame` rejected `None` for `item_id` before the data even reached Delta. Fixed by switching to an explicit `StructType` with `nullable=True` on `item_id`.
+
+**Cause 2 - Primary key constraint**: `item_id` is part of the primary key of `hist_eval_metrics` (`PRIMARY KEY (sim_id, tick, item_id, metric_name)`). Even with the `StructType` fix, Delta enforces `NOT NULL` on all primary key columns regardless of the schema passed to `createDataFrame`. `NULL` in a primary key column is therefore not viable as a sentinel - it will always be rejected at the Delta layer.
+
+### Fix
+
+The `StructType` change (Cause 1) is retained as it is correct and consistent with the table DDL. For Cause 2, the run-level metric rows now use a string sentinel value `"__run_level__"` in place of `None` for `item_id`. This satisfies the primary key `NOT NULL` constraint while still being unambiguously distinguishable from real item IDs in queries (`WHERE item_id = '__run_level__'` for run-level metrics, `WHERE item_id != '__run_level__'` for item-level metrics).
+
+This does not require a DDL change - `item_id STRING` in `setup4dataStore.py` accepts any string value. No existing queries are broken: all current queries filter by real `item_id` values or leave `item_id` unfiltered, neither of which conflicts with the sentinel.
+
+# Integration Tests
+# IT1: Rule-Based vs. LLM Agent (Finite Ticks)
+
+**File**: [`_testNotebooks/integrationTesting/integrationTest-1/integrationTest-1.py`](./_testNotebooks/integrationTesting/integrationTest-1/integrationTest-1.py)
+
+**Plan**: [`_testNotebooks/integrationTesting/integrationTest-1/README.md`](./_testNotebooks/integrationTesting/integrationTest-1/README.md)
+
+A single notebook split into two independent sections. Section 1 runs both agents sequentially against an identical world configuration. Section 2 reads only from Delta tables - no simulation code - and can be re-run independently without re-running Section 1. This matters because a 20-tick LLM run has non-trivial wall time.
+
+**World**: 2 items, 2 suppliers, 1 consumer, 20 ticks, deterministic lead times (`variability=0.0`), same seed for both runs. Three disruptions chosen to stress both agents: a demand spike on item_A (ticks 6–9), a demand suppression on item_B (ticks 12–15), and a transit delay on item_A (ticks 14–17) overlapping the suppression. The world is written twice - once per `sim_id` - because env tables like `env_patterns` and `env_disruption_schedule` are scoped by `sim_id`.
+
+**Agent 1** (`SIM_ID_RULEBASED`): `RuleBasedAgent`, instantiated directly.
+
+**Agent 2** (`SIM_ID_LLM`): `LLMAgentWrapper` with `stub_mode=None`, `suppress_write_tools=True`, `executor_trigger_every_n_ticks=4`. With 20 ticks this gives up to 5 executor dispatches (ticks 4, 8, 12, 16, 20). Due to LLM call latency relative to tick loop speed, the executor will likely still be running when several trigger ticks fire - meaning many ticks return `_last_committed` (hold-all or the last committed result) rather than fresh LLM decisions. This is expected behaviour and is documented in the agent health summary (Table 5) and eval metrics query (Q3). The comparison is still valid for ticks where LLM decisions were committed.
+
+**Section 2 - Analyse**:
+- All data loaded once in cell 2.0; plot and table cells reference DataFrames without re-querying
+- 6 plots: disruptions (sanity check - should be identical for both sim_ids), demand, actual average lead time (computed from `ops_pending_orders`, not configured baseline), stacked cost per item, fulfilment vs. unmet demand, reorder decisions (Plots 5 and 6 share an x-axis as a two-panel figure per agent)
+- 6 summary tables: disruption summary, reorder decisions (with `agent_reasoning` for LLM run), demand fulfilment, stockout summary, agent health (LLM only - `FALLBACK_*` and `AGENT_ERROR` event counts), escalation summary (LLM only)
+- 9 evaluation queries (Q1–Q9) including a gap check (Q2, expect zero rows) and the headline cost comparison (Q7)
+
+**Key interpretation notes** carried forward from the test plan:
+- Table 5 (agent health) must be checked before interpreting Plot 4 and Q7. Fallback events mean those ticks used `RuleBasedAgent` decisions - the cost comparison is not fully clean for those ticks.
+- Q3 (`hist_eval_metrics`) will return `metric_value=0.0` for all rows - metric computation is not yet implemented. The query confirms the monitoring loop ran every tick; the values are not yet meaningful.
+- `agent_reasoning` in Table 2 is the most direct window into the LLM's decision logic for the LLM run and is worth reading manually for a 20-tick test.
+
+## IT2: Continuous Simulation
+
+**Files**:
+
+- [`_testNotebooks/integrationTest-2/continuousSim-agentRunner.py`](./_testNotebooks/continuousSimulation/continuousSim-agentRunner.py)
+- [`_testNotebooks/integrationTest-2/continuousSim-liveDashboard.py`](./_testNotebooks/continuousSimulation/continuousSim-liveDashboard.py)
+
+**Plan**: [`_testNotebooks/integrationTest-2/README.md`](./_testNotebooks/continuousSimulation/README.md)
+
+Two notebooks meant to run simultaneously in separate browser tabs. They are decoupled by design - the only shared state between them is `SIM_ID` and the Delta tables the runner writes to.
+
+**Agent runner** runs the simulation using `ContinuousRunner` with a configurable agent. `AGENT_TYPE = "rule_based"` or `"llm"` at the top is the only switch - a single branching cell in Section 6 instantiates the appropriate agent, and everything downstream (`ContinuousRunner` construction, `run()`) is identical regardless of which branch was taken. For the LLM path, `LLMAgentWrapper` is instantiated with `stub_mode=None` and `suppress_write_tools=True`, consistent with the integration decisions documented above. `ContinuousRunner` handles wall-clock pacing and graceful `KeyboardInterrupt` - `SIM_ENDED` is always written before the cell exits.
+
+**Live dashboard** polls Delta tables at a configurable interval and re-renders a four-subplot composite figure in place using `IPython.display.clear_output`. It has no imports from `warehouse_sim` - it only reads tables via Spark SQL. The four subplots share an x-axis and show: (1) stock on hand + demand + reorder markers, (2) fulfilled vs. unmet demand with stockout ticks shaded, (3) disruption effective magnitude per tick, (4) per-component cost stacked bars with cumulative total on a secondary axis. A rolling `MAX_TICKS_TO_SHOW` window keeps the plot readable as the run extends.
+
+The dashboard can be started before, during, or after the runner. If no data exists yet for the `SIM_ID`, it prints a waiting message and retries each poll interval.
+
+**Note on `TICK_DURATION_SECONDS`**: for a meaningful live feed, the runner should be paced at 2–5 seconds per tick. At full speed the dashboard sees large bursts of ticks per poll rather than a stream, which makes the plots less informative in real time.

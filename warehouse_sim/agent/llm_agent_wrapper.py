@@ -70,6 +70,8 @@ from collections import deque
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Optional
 
+from pyspark.sql.types import DoubleType, IntegerType, StringType, StructField, StructType, TimestampType
+
 from ..config.models import SimWorld
 from ..event_log.event_log import EventLogger
 from .base import AgentContext, BaseAgent, ReorderDecision
@@ -88,9 +90,29 @@ _LLMReorderAgentClass = None  # resolved at first instantiation with stub_mode=N
 # Table reference
 # ---------------------------------------------------------------------------
 
-_CATALOG             = "hackathon_of_the_century"
-_EVAL_METRICS_TABLE  = f"{_CATALOG}.tables4hist.hist_eval_metrics"
-_EVAL_METRICS_SCHEMA = "sim_id STRING, tick INT, item_id STRING, metric_name STRING, metric_value DOUBLE, logged_at TIMESTAMP"
+_CATALOG            = "hackathon_of_the_century"
+_EVAL_METRICS_TABLE = f"{_CATALOG}.tables4hist.hist_eval_metrics"
+
+# FIX: StructType used here instead of a DDL string schema
+# ("sim_id STRING, tick INT, item_id STRING, ...").
+#
+# Root cause:
+# - Spark's string DDL parser marks every column NOT NULL by default
+# - The hist_eval_metrics Delta table correctly declares item_id as nullable (no NOT NULL in setup4dataStore.py), but createDataFrame was enforcing non-nullability at the Spark level before the data even reached the table
+# - The run-level metric row (budget_utilisation) has item_id=None by design — NULL is the signal that a metric is run-level rather than item-level
+# - This produced a NOT NULL constraint violation on every tick
+# 
+# Resolution:
+# - StructType with nullable=True on item_id matches the actual table DDL and allows NULL to pass through createDataFrame correctly
+# - All other columns are nullable=False, consistent with their NOT NULL declarations in the DDL
+_EVAL_METRICS_SCHEMA = StructType([
+    StructField("sim_id",       StringType(),    nullable=False),
+    StructField("tick",         IntegerType(),   nullable=False),
+    StructField("item_id",      StringType(),    nullable=True),   # NULL for run-level metrics
+    StructField("metric_name",  StringType(),    nullable=False),
+    StructField("metric_value", DoubleType(),    nullable=False),
+    StructField("logged_at",    TimestampType(), nullable=False),
+])
 
 
 # ---------------------------------------------------------------------------

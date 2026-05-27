@@ -47,6 +47,7 @@ runner.run()
 
 from __future__ import annotations
 
+import time
 from typing import Optional, TYPE_CHECKING
 
 from ..config.models import RunMode, SimWorld
@@ -182,7 +183,6 @@ class SimRunner:
         
         NOTE: The simulation runs for `config.num_ticks` ticks when run_mode is 'finite', or forever when 'infinite' or 'cyclic'.
         '''
-        
         self._initialise()
 
         tick = 0
@@ -191,6 +191,23 @@ class SimRunner:
             tick += 1
 
         self._teardown(tick - 1)
+
+    # ------------------------------------------------------------------
+    # Console logging
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _log(msg: str) -> None:
+        '''
+        Write a timestamped console line.
+
+        Kept as a static method so it can be called from any instance method
+        without threading concerns. Uses print() rather than the Python logging
+        module — Databricks notebooks display print() output inline in the cell
+        output, which is where progress monitoring is most useful.
+        '''
+        ts = time.strftime("%H:%M:%S")
+        print(f"[{ts}] {msg}")
 
     # ------------------------------------------------------------------
     # Initialisation
@@ -204,6 +221,13 @@ class SimRunner:
             item_id: CostState(item_id=item_id)
             for item_id in self._world.items
         }
+
+        self._log(
+            f"SIM_STARTED  sim_id={self._sim_id!r}  "
+            f"ticks={self._config.num_ticks}  "
+            f"seed={self._config.random_seed}  "
+            f"agent={self._agent.agent_version()}"
+        )
 
         self._logger.sim_started(
             tick             = 0,
@@ -234,6 +258,7 @@ class SimRunner:
     # ------------------------------------------------------------------
 
     def _run_tick(self, tick: int) -> None:
+        self._log(f"TICK_START   tick={tick:>3}")
         self._logger.tick_started(tick)
 
         # NOTE: The numberings here refer simulation loop steps and sub-steps, as detailed in this module's docstring.
@@ -402,6 +427,14 @@ class SimRunner:
         placed_orders: list[PlacedOrder] = []
         tick_order_costs: dict[str, float] = {i: 0.0 for i in self._world.items}
 
+        # Console summary: one line per decision
+        for decision in decisions:
+            if decision.order_qty > 0:
+                self._log(
+                    f"  REORDER     tick={tick:>3}  item={decision.item_id}  "
+                    f"qty={decision.order_qty}"
+                )
+
         for decision in decisions:
             item_id  = decision.item_id
             item     = self._world.items[item_id]
@@ -548,6 +581,21 @@ class SimRunner:
         # ----------------------------------------------------------------
         self._check_budget_events(tick)
 
+        tick_total_all_items = sum(
+            v["holding"] + v["stockout"] + v["order"] + v["transit_loss"]
+            for v in tick_costs.values()
+        )
+        stockout_items = [
+            item_id for item_id, v in tick_costs.items() if v["stockout"] > 0
+        ]
+        stockout_str = f"  STOCKOUT={stockout_items}" if stockout_items else ""
+        self._log(
+            f"TICK_END     tick={tick:>3}  "
+            f"tick_cost={tick_total_all_items:>8.2f}  "
+            f"cumulative={self._total_cost:>10.2f}"
+            f"{stockout_str}"
+        )
+
         self._logger.tick_ended(tick)
 
     # ------------------------------------------------------------------
@@ -560,6 +608,13 @@ class SimRunner:
             total_cost           = self._total_cost,
             total_stockout_ticks = self._total_stockout_ticks,
             total_reorders       = self._total_reorders,
+        )
+        self._log(
+            f"SIM_ENDED    sim_id={self._sim_id!r}  "
+            f"final_tick={final_tick}  "
+            f"total_cost={self._total_cost:.2f}  "
+            f"reorders={self._total_reorders}  "
+            f"stockout_ticks={self._total_stockout_ticks}"
         )
 
     # ------------------------------------------------------------------

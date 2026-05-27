@@ -11,7 +11,7 @@
 # MAGIC The runner will catch the interruption, write `SIM_ENDED`, and print a
 # MAGIC final summary before exiting cleanly.
 # MAGIC
-# MAGIC **Depends on**: Stages 1–4 (world must already exist in env tables,
+# MAGIC **Depends on**: Stages 1-4 (world must already exist in env tables,
 # MAGIC or build it fresh in section 4 below).
 
 # COMMAND ----------

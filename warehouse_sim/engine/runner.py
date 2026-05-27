@@ -203,7 +203,7 @@ class SimRunner:
 
         Kept as a static method so it can be called from any instance method
         without threading concerns. Uses print() rather than the Python logging
-        module — Databricks notebooks display print() output inline in the cell
+        module - Databricks notebooks display print() output inline in the cell
         output, which is where progress monitoring is most useful.
         '''
         ts = time.strftime("%H:%M:%S")

@@ -99,7 +99,7 @@ _EVAL_METRICS_TABLE = f"{_CATALOG}.tables4hist.hist_eval_metrics"
 # Root cause:
 # - Spark's string DDL parser marks every column NOT NULL by default
 # - The hist_eval_metrics Delta table correctly declares item_id as nullable (no NOT NULL in setup4dataStore.py), but createDataFrame was enforcing non-nullability at the Spark level before the data even reached the table
-# - The run-level metric row (budget_utilisation) has item_id=None by design — NULL is the signal that a metric is run-level rather than item-level
+# - The run-level metric row (budget_utilisation) has item_id=None by design - NULL is the signal that a metric is run-level rather than item-level
 # - This produced a NOT NULL constraint violation on every tick
 # 
 # Resolution:
@@ -828,6 +828,7 @@ class LLMAgentWrapper(BaseAgent):
 
         # Write all rows for this tick in a single Spark operation.
         # NOTE: One append per tick (not per row) to minimise write overhead.
+        print("HELLO!")
         if rows:
             (
                 self._spark
@@ -836,6 +837,7 @@ class LLMAgentWrapper(BaseAgent):
                 .mode("append")
                 .saveAsTable(_EVAL_METRICS_TABLE)
             )
+        print("BYE!")
 
 
 # ---------------------------------------------------------------------------

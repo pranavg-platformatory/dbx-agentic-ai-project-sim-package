@@ -4,7 +4,7 @@
 
 > **Spec sources**:
 >
-> - [`reasoningIntegrationSpecs-2.md`](./reasoningIntegrationSpecs-2.md) - decision-making points 1–9, overall solution structure, key points
+> - [`reasoningIntegrationSpecs-2.md`](./reasoningIntegrationSpecs-2.md) - decision-making points 1-9, overall solution structure, key points
 > - [`reasoningIntegrationSpecs-3.md`](./reasoningIntegrationSpecs-3.md) - sharpening and missing items
 > - [`reasoningIntegrationSpecs-4.md`](./reasoningIntegrationSpecs-4.md) - LLMAgentWrapper design and resolved concerns
 >

@@ -15,6 +15,12 @@
 # MAGIC create schema if not exists tables4ops;
 # MAGIC create schema if not exists tables4hist;
 # MAGIC create schema if not exists tables4eventlog;
+# MAGIC --
+# MAGIC -- agent_tools: UC functions and tables owned by the LLM agent layer (Her Majesty Reshma the Boss's scope).
+# MAGIC -- This schema is NOT written by the simulation engine. It is populated separately via the
+# MAGIC -- UC_Functions notebook in the LLM agent package (dbx-agentic-ai-project-test-llm-reorder-agent-package).
+# MAGIC -- It is declared here so that the full catalog layout is visible in one place.
+# MAGIC create schema if not exists agent_tools;
 
 # COMMAND ----------
 
@@ -515,6 +521,60 @@
 # MAGIC COMMENT 'Records the activation state of every in-window disruption for every tick. Written at sub-step (0) before other tick events. Exposed to the agent (FR-04) as the active disruption context view.'
 # MAGIC TBLPROPERTIES (
 # MAGIC  'delta.appendOnly' = 'true',
+# MAGIC  'simulation.layer' = 'operational'
+# MAGIC )
+# MAGIC PARTITIONED BY (sim_id);
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## `ops_escalation_queue`
+# MAGIC
+# MAGIC **Origin**: Introduced by Her Majesty Reshma the Boss's LLM agent package (`dbx-agentic-ai-project-test-llm-reorder-agent-package`), defined in `notebooks/UC_Functions.py`.
+# MAGIC
+# MAGIC Human-review queue written by the LLM agent when it encounters a situation it cannot resolve autonomously. The agent makes a HOLD decision for the item and simultaneously escalates it here, so that a human operator can act on the flagged situation without the simulation halting.
+# MAGIC
+# MAGIC This table is **not written by the simulation engine**. It is written exclusively by the LLM agent via the `escalate_item` UC function (`hackathon_of_the_century.agent_tools.escalate_item`), which validates the escalation reason and builds the row before insertion. The engine and rule-based agent have no awareness of this table.
+# MAGIC
+# MAGIC **Escalation triggers** (as enforced by the agent's system prompt):
+# MAGIC - `BUDGET_BREACH`: a reorder is needed but its cost would exceed the remaining budget
+# MAGIC - `STOCKOUT_IMMINENT`: stockout will occur within 1 tick and no order can arrive in time
+# MAGIC - `NO_SUPPLIER`: no supplier information is available for the item
+# MAGIC - `OTHER`: any other situation warranting human review
+# MAGIC
+# MAGIC In all cases the agent still returns a HOLD decision for the item to the runner via `decide()`, so the simulation tick completes normally.
+# MAGIC
+# MAGIC **Production note**: In a production deployment this table acts as the interface between the autonomous agent and the human operations layer. Rows with `status = 'OPEN'` represent items awaiting human review. An operator reviewing and acting on an escalation would update `status` to `'REVIEWED'`; this table is therefore **not** append-only at the row level (`delta.appendOnly = false`), unlike the purely historical tables.
+# MAGIC
+# MAGIC | Column | Type | Description |
+# MAGIC |---|---|---|
+# MAGIC | `sim_id` | string FK | Simulation run |
+# MAGIC | `tick` | integer | Tick at which the escalation was raised |
+# MAGIC | `item_id` | string FK | Item that triggered the escalation |
+# MAGIC | `reason` | enum | `BUDGET_BREACH`, `NO_SUPPLIER`, `STOCKOUT_IMMINENT`, `OTHER` |
+# MAGIC | `context_json` | string | JSON snapshot of the relevant AgentContext fields at escalation time |
+# MAGIC | `status` | enum | `OPEN` (awaiting review) or `REVIEWED` (human has acted) |
+# MAGIC | `raised_at` | timestamp | Wall-clock time the escalation was written |
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC CREATE TABLE IF NOT EXISTS hackathon_of_the_century.tables4ops.ops_escalation_queue (
+# MAGIC
+# MAGIC  sim_id STRING NOT NULL COMMENT 'Foreign key to env_sim_config.sim_id. Identifies the simulation run during which this escalation was raised.',
+# MAGIC  tick INT NOT NULL COMMENT 'Simulation tick at which the LLM agent raised this escalation. The agent made a concurrent HOLD decision for the same item this tick, so the simulation continued normally.',
+# MAGIC  item_id STRING NOT NULL COMMENT 'Foreign key to env_item_types.item_id. The item that could not be handled autonomously and requires human review.',
+# MAGIC  reason STRING NOT NULL COMMENT 'Categorised reason for escalation. Allowed values: BUDGET_BREACH (reorder needed but exceeds remaining budget), NO_SUPPLIER (no supplier info available), STOCKOUT_IMMINENT (stockout within 1 tick, no order can arrive in time), OTHER (any other situation). Validated by the escalate_item UC function.',
+# MAGIC  context_json STRING COMMENT 'JSON snapshot of the relevant AgentContext fields at the time of escalation (e.g. stock levels, pending orders, remaining budget, active disruptions). Written by the agent for the benefit of the human reviewer. May be NULL if the agent could not serialise context.',
+# MAGIC  status STRING NOT NULL COMMENT 'Review lifecycle status. OPEN: escalation has been raised and not yet acted on by a human operator. REVIEWED: a human operator has reviewed and acted on the escalation. This column is mutable - it is updated by human workflow, not by the simulation engine.',
+# MAGIC  raised_at TIMESTAMP NOT NULL COMMENT 'Wall-clock timestamp at which this escalation row was written by the agent via the escalate_item UC function. Not a simulation time - use tick for simulation-time ordering.',
+# MAGIC
+# MAGIC  CONSTRAINT pk_ops_escalation_queue PRIMARY KEY (sim_id, tick, item_id)
+# MAGIC )
+# MAGIC USING DELTA
+# MAGIC COMMENT 'Human-review queue written by the LLM agent when it encounters a situation it cannot resolve autonomously (budget breach, imminent stockout, missing supplier). The agent always makes a concurrent HOLD decision so the simulation continues. Rows with status=OPEN await human review. Written exclusively by the LLM agent via the escalate_item UC function; the simulation engine does not write to this table.'
+# MAGIC TBLPROPERTIES (
+# MAGIC  'delta.appendOnly' = 'false',
 # MAGIC  'simulation.layer' = 'operational'
 # MAGIC )
 # MAGIC PARTITIONED BY (sim_id);

@@ -3,16 +3,11 @@
 # MAGIC # Continuous Mode Runner
 # MAGIC ### Live simulation with real-time pacing and progress output
 # MAGIC
-# MAGIC This notebook runs the simulation in continuous (infinite or cyclic) mode
-# MAGIC with configurable wall-clock pacing between ticks and live progress printed
-# MAGIC to the cell output.
+# MAGIC This notebook runs the simulation in continuous (infinite or cyclic) mode with configurable wall-clock pacing between ticks and live progress printed to the cell output.
 # MAGIC
-# MAGIC **Stop the simulation** by clicking **Interrupt** in the notebook toolbar.
-# MAGIC The runner will catch the interruption, write `SIM_ENDED`, and print a
-# MAGIC final summary before exiting cleanly.
+# MAGIC **Stop the simulation** by clicking **Interrupt** in the notebook toolbar. The runner will catch the interruption, write `SIM_ENDED`, and print a final summary before exiting cleanly.
 # MAGIC
-# MAGIC **Depends on**: Stages 1-4 (world must already exist in env tables,
-# MAGIC or build it fresh in section 4 below).
+# MAGIC **Depends on**: Stages 1-4 (world must already exist in env tables, or build it fresh in section 4 below).
 
 # COMMAND ----------
 # MAGIC %md

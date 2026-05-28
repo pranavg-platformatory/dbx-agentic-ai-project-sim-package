@@ -85,7 +85,6 @@ if TYPE_CHECKING:
 # NOTE: LLMReorderAgent is imported lazily inside __init__ (only when stub_mode=None) so that the module can be imported and stub-mode tests run without the LLM agent package being on the path (see [DEP-5] in the module docstring).
 _LLMReorderAgentClass = None  # resolved at first instantiation with stub_mode=None
 
-
 #################################################
 # Table reference
 #################################################

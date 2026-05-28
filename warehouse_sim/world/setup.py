@@ -39,9 +39,9 @@ if TYPE_CHECKING:
     from pyspark.sql import SparkSession
 
 
-# ---------------------------------------------------------------------------
+#################################################
 # Catalog / schema constants - must match loader.py and DDL
-# ---------------------------------------------------------------------------
+#################################################
 
 CATALOG = "hackathon_of_the_century"
 ENV     = f"{CATALOG}.tables4env"
@@ -51,7 +51,7 @@ def _t(name: str) -> str:
     return f"{ENV}.{name}"
 
 
-# ---------------------------------------------------------------------------
+#################################################
 # Explicit DDL schemas per table
 
 # NOTE:
@@ -60,7 +60,7 @@ def _t(name: str) -> str:
 #   - Missing nullability on arrays
 #   - Ambiguous boolean/double types
 # - The same class of issues were seen in the Stage 1 notebook (_testNotebooks/coreSimulation/stage1-testAndInspect.py in this repo) when using `createDataFrame` without a schema.
-# ---------------------------------------------------------------------------
+#################################################
 
 # REFERENCE: _dataStoreDefinition in this repo
 _SCHEMAS = {
@@ -137,9 +137,9 @@ _SCHEMAS = {
 }
 
 
-# ---------------------------------------------------------------------------
+#################################################
 # Internal helpers
-# ---------------------------------------------------------------------------
+#################################################
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -200,9 +200,9 @@ def _delete_sim_rows(spark: "SparkSession", sim_id: str) -> None:
         spark.sql(f"DELETE FROM {_t(table)} WHERE sim_id = '{sim_id}'")
 
 
-# ---------------------------------------------------------------------------
+#################################################
 # Per-table writers
-# ---------------------------------------------------------------------------
+#################################################
 
 # NOTE: Detailed docstrings are not given for the following as they are simply wrappers for `_write`, each function wrapping the `_write` function call needed to add data into the tables referenced/indicated by the function names.
 
@@ -343,9 +343,9 @@ def _write_disruptions(
     ])
 
 
-# ---------------------------------------------------------------------------
+#################################################
 # Public API
-# ---------------------------------------------------------------------------
+#################################################
 
 def write_world(spark: "SparkSession", world: SimWorld) -> None:
     '''

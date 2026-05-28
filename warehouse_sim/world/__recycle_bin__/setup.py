@@ -32,9 +32,9 @@ if TYPE_CHECKING:
     from pyspark.sql import SparkSession
 
 
-# ---------------------------------------------------------------------------
+#################################################
 # Catalog / schema constants - must match loader.py and DDL
-# ---------------------------------------------------------------------------
+#################################################
 
 CATALOG = "hackathon_of_the_century"
 ENV     = f"{CATALOG}.tables4env"
@@ -44,9 +44,9 @@ def _t(name: str) -> str:
     return f"{ENV}.{name}"
 
 
-# ---------------------------------------------------------------------------
+#################################################
 # Internal helpers
-# ---------------------------------------------------------------------------
+#################################################
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -74,9 +74,9 @@ def _delete_sim_rows(spark: "SparkSession", sim_id: str) -> None:
         spark.sql(f"DELETE FROM {_t(table)} WHERE sim_id = '{sim_id}'")
 
 
-# ---------------------------------------------------------------------------
+#################################################
 # Per-table writers
-# ---------------------------------------------------------------------------
+#################################################
 
 def _write_sim_config(spark: "SparkSession", config: SimConfig) -> None:
     row = _Row(
@@ -221,9 +221,9 @@ def _write_disruptions(
     spark.createDataFrame(rows).write.mode("append").saveAsTable(_t("env_disruption_schedule"))
 
 
-# ---------------------------------------------------------------------------
+#################################################
 # Public API
-# ---------------------------------------------------------------------------
+#################################################
 
 def write_world(spark: "SparkSession", world: SimWorld) -> None:
     '''

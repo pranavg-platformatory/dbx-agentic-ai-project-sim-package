@@ -86,9 +86,9 @@ if TYPE_CHECKING:
 _LLMReorderAgentClass = None  # resolved at first instantiation with stub_mode=None
 
 
-# ---------------------------------------------------------------------------
+#################################################
 # Table reference
-# ---------------------------------------------------------------------------
+#################################################
 
 _CATALOG            = "hackathon_of_the_century"
 _EVAL_METRICS_TABLE = f"{_CATALOG}.tables4hist.hist_eval_metrics"
@@ -120,9 +120,9 @@ _EVAL_METRICS_SCHEMA = StructType([
     StructField("logged_at",    TimestampType(), nullable=False),
 ])
 
-# ---------------------------------------------------------------------------
+#################################################
 # LLMAgentWrapper
-# ---------------------------------------------------------------------------
+#################################################
 
 class LLMAgentWrapper(BaseAgent):
     '''
@@ -173,7 +173,7 @@ class LLMAgentWrapper(BaseAgent):
         self._config = config
         self._logger = logger
 
-        # ------------------------------------------------------------------
+        #------------------------
         # Resolve `context_obsolescence_threshold_k`
         #
         # - If not explicitly set, K defaults to the minimum base_lead_time_ticks across all suppliers in the world
@@ -183,7 +183,7 @@ class LLMAgentWrapper(BaseAgent):
         # NOTE:
         # - The resolved value is stored as self._resolved_k and must be logged to MLflow at run start - never the raw None.
         # - See [DEP-2] for `SimWorld.suppliers` structure assumption
-        # ------------------------------------------------------------------
+        #------------------------
         if config.context_obsolescence_threshold_k is not None:
             self._resolved_k: int = config.context_obsolescence_threshold_k
         else:
@@ -193,7 +193,7 @@ class LLMAgentWrapper(BaseAgent):
             )
             self._resolved_k = min_lead_time
 
-        # ------------------------------------------------------------------
+        #------------------------
         self._queue: deque[QueueMessage] = deque(maxlen=config.queue_size)
         '''
         _queue
@@ -205,7 +205,7 @@ class LLMAgentWrapper(BaseAgent):
         NOTE: The drain logic in Stage 6 (see __docs/reasoningIntegrationDevelopmentApproach-3.md) is implemented in full regardless of queue_size, so that larger values work without code changes.
         '''
 
-        # ------------------------------------------------------------------
+        #------------------------
         self._last_committed: list[ReorderDecision] = [
             ReorderDecision(
                 item_id   = item_id,
@@ -221,7 +221,7 @@ class LLMAgentWrapper(BaseAgent):
         - This means decide() always returns a valid list[ReorderDecision] from tick 0 - no None check needed in the hot path, and the runner never receives an empty list
         '''
 
-        # ------------------------------------------------------------------
+        #------------------------
         # Shared state for executor (Stage 6 (see __docs__/reasoningIntegrationDevelopmentApproach-3.md))
         # 
         # - Declared here so the full class shape is visible at Stage 5 (see _docs__/reasoningIntegrationDevelopmentApproach-3.md)
@@ -229,7 +229,7 @@ class LLMAgentWrapper(BaseAgent):
         self._result_slot:   Optional[ExecutorResult] = None   # written by executor thread
         self._executor_busy: bool                     = False  # True from dispatch until slot write
 
-        # ------------------------------------------------------------------
+        #------------------------
         # Thread-safety lock for shared result slot
         #
         # CONCEPTUAL SIDE NOTE:
@@ -245,10 +245,10 @@ class LLMAgentWrapper(BaseAgent):
         # Hence:
         # - A threading.Lock makes the intent explicit and ensures correctness outside CPython (e.g. Jython, PyPy with STM)
         # - The lock is held only for the read-then-clear or write operations on the slot - never across the LLM call - so contention is negligible
-        # ------------------------------------------------------------------
+        #------------------------
         self._slot_lock: threading.Lock = threading.Lock()
 
-        # ------------------------------------------------------------------
+        #------------------------
         self._fallback_agent = RuleBasedAgent()
         '''
         Fallback agent
@@ -257,7 +257,7 @@ class LLMAgentWrapper(BaseAgent):
         - Instantiated here (not in the executor thread) so it is shared and not re-created per invocation
         '''
 
-        # ------------------------------------------------------------------
+        #------------------------
         # LLMReorderAgent - the real LLM call (stub_mode=None only)
         #
         # - Instantiated here rather than in _run_executor so:
@@ -265,7 +265,7 @@ class LLMAgentWrapper(BaseAgent):
         #   (b) The object is shared across all executor invocations without being re-created each time (LLMReorderAgent.__init__ builds the LangGraph graph and binds tools, which is non-trivial)
         # - When stub_mode is not None, this is None and never called
         # - See [DEP-5] in the module docstring for path requirements
-        # ------------------------------------------------------------------
+        #------------------------
         if config.stub_mode is None:
             import sys
             sys.path.insert(0, '/Workspace/Shared/reorder-llm-agent')
@@ -283,7 +283,7 @@ class LLMAgentWrapper(BaseAgent):
                         f"Original error: {e}"
                     ) from e
 
-            # ------------------------------------------------------------------
+            #------------------------
             # Write-tool suppression (to address point 3 - duplicate hist_reorder_decisions writes (see "Integration Points with Her Majesty Reshma the Boss's Package" in devlog.md))
             #
             # LLMReorderAgent's tool list (uc_tools.ALL_TOOLS) includes log_agent_decision and escalate_item. When running inside the simulation:
@@ -303,7 +303,7 @@ class LLMAgentWrapper(BaseAgent):
             # - The LLM's system prompt still instructs it to call log_agent_decision
             # - With the tool absent from the bound list, the LLM will either skip it or produce a tool-not-found message that is handled by tools_node without halting the loop
             # - The reasoning and decision still flow through correctly
-            # ------------------------------------------------------------------
+            #------------------------
             _WRITE_TOOL_NAMES_TO_EXCLUDE = {"log_agent_decision"}
 
             if config.suppress_write_tools:
@@ -325,9 +325,9 @@ class LLMAgentWrapper(BaseAgent):
         else:
             self._llm_agent = None  # stub path; _run_executor uses _StubLLMAgent instead
 
-    # ------------------------------------------------------------------
+    #====================================
     # BaseAgent contract
-    # ------------------------------------------------------------------
+    #====================================
 
     @staticmethod
     def agent_version() -> str:
@@ -364,16 +364,16 @@ class LLMAgentWrapper(BaseAgent):
           NOTE: The engine will raise an exception if an item is missing from the returned list
         '''
 
-        # ------------------------------------------------------------------
+        #------------------------
         # [1] Monitoring loop
-        # ------------------------------------------------------------------
+        #------------------------
         message = self._build_queue_message(context)
         self._queue.append(message)
         self._write_eval_metrics(context)
 
-        # ------------------------------------------------------------------
+        #------------------------
         # [2] Executor loop
-        # ------------------------------------------------------------------
+        #------------------------
 
         # (a) Consume result slot
         #
@@ -436,14 +436,14 @@ class LLMAgentWrapper(BaseAgent):
             )
             thread.start()
 
-        # ------------------------------------------------------------------
+        #------------------------
         # [3] Return last committed decisions
-        # ------------------------------------------------------------------
+        #------------------------
         return self._last_committed
 
-    # ------------------------------------------------------------------
+    #====================================
     # Monitoring loop helpers
-    # ------------------------------------------------------------------
+    #====================================
 
     def _build_queue_message(self, context: AgentContext) -> QueueMessage:
         '''
@@ -476,9 +476,9 @@ class LLMAgentWrapper(BaseAgent):
             sim_id                 = context.sim_id,
         )
 
-    # ------------------------------------------------------------------
+    #====================================
     # Executor thread
-    # ------------------------------------------------------------------
+    #====================================
 
     def _run_executor(
         self,
@@ -649,9 +649,9 @@ class LLMAgentWrapper(BaseAgent):
             self._result_slot   = result
             self._executor_busy = False
 
-    # ------------------------------------------------------------------
+    #====================================
     # Pre-flight validation helpers
-    # ------------------------------------------------------------------
+    #====================================
 
     def _validate_structural(
         self,
@@ -740,9 +740,9 @@ class LLMAgentWrapper(BaseAgent):
                 })
         return violations
 
-    # ------------------------------------------------------------------
+    #====================================
     # Monitoring loop helpers (Stage 5 - unchanged)
-    # ------------------------------------------------------------------
+    #====================================
 
     def _write_eval_metrics(self, context: AgentContext) -> None:
         '''
@@ -846,9 +846,9 @@ class LLMAgentWrapper(BaseAgent):
                 .saveAsTable(_EVAL_METRICS_TABLE)
             )
 
-# ---------------------------------------------------------------------------
+#################################################
 # _StubLLMAgent (simulation phase only)
-# ---------------------------------------------------------------------------
+#################################################
 
 class _StubLLMAgent:
     '''
@@ -923,9 +923,9 @@ class _StubLLMAgent:
             # stub_mode=None should never reach here - _run_executor guards it.
             raise ValueError("_StubLLMAgent instantiated with stub_mode=None. Route to the real LLM call instead.")
 
-# ---------------------------------------------------------------------------
+#################################################
 # Module-level helper
-# ---------------------------------------------------------------------------
+#################################################
 
 def _metric_row(
     sim_id:    str,

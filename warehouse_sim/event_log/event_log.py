@@ -41,9 +41,9 @@ if TYPE_CHECKING:
     from pyspark.sql import SparkSession
 
 
-# ---------------------------------------------------------------------------
+#################################################
 # Catalog / schema constants
-# ---------------------------------------------------------------------------
+#################################################
 
 CATALOG    = "hackathon_of_the_century"
 EVENTLOG   = f"{CATALOG}.tables4eventlog"
@@ -87,9 +87,9 @@ EVENT_TYPES = frozenset({
 })
 
 
-# ---------------------------------------------------------------------------
+#################################################
 # Internal helpers
-# ---------------------------------------------------------------------------
+#################################################
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -156,9 +156,9 @@ def _build_row(
     }
 
 
-# ---------------------------------------------------------------------------
+#################################################
 # EventLogger
-# ---------------------------------------------------------------------------
+#################################################
 
 class EventLogger:
     '''
@@ -174,9 +174,9 @@ class EventLogger:
         self._spark  = spark
         self._sim_id = sim_id
 
-    # ------------------------------------------------------------------
+    #====================================
     # Internal write
-    # ------------------------------------------------------------------
+    #====================================
 
     def _write(self, row: dict) -> None:
         '''
@@ -225,9 +225,9 @@ class EventLogger:
         )
         self._write(row)
     
-    # ------------------------------------------------------------------
+    #====================================
     # Generic error logging for runner resilience wrap
-    # ------------------------------------------------------------------
+    #====================================
  
     def agent_error(
         self,
@@ -250,9 +250,9 @@ class EventLogger:
         )
 
 
-    # ------------------------------------------------------------------
+    #====================================
     # Simulation lifecycle
-    # ------------------------------------------------------------------
+    #====================================
 
     # NOTE: Detailed docstrings are not given for the following as they are simply wrappers for `_emit`, each function wrapping the `_emit` function call needed to add data for the event types referenced/indicated by the function names.
 
@@ -272,9 +272,9 @@ class EventLogger:
             "total_reorders":       total_reorders,
         })
 
-    # ------------------------------------------------------------------
+    #====================================
     # Tick lifecycle
-    # ------------------------------------------------------------------
+    #====================================
 
     # NOTE: Detailed docstrings are not given for the following as they are simply wrappers for `_emit`, each function wrapping the `_emit` function call needed to add data for the event types referenced/indicated by the function names.
 
@@ -284,9 +284,9 @@ class EventLogger:
     def tick_ended(self, tick: int) -> None:
         self._emit(tick, "TICK_ENDED", {"tick": tick})
 
-    # ------------------------------------------------------------------
+    #====================================
     # Demand
-    # ------------------------------------------------------------------
+    #====================================
 
     # NOTE: Detailed docstrings are not given for the following as they are simply wrappers for `_emit`, each function wrapping the `_emit` function call needed to add data for the event types referenced/indicated by the function names.
 
@@ -318,9 +318,9 @@ class EventLogger:
             "stockout_cost": stockout_cost,
         }, item_id=item_id)
 
-    # ------------------------------------------------------------------
+    #====================================
     # Supply
-    # ------------------------------------------------------------------
+    #====================================
 
     # NOTE: Detailed docstrings are not given for the following as they are simply wrappers for `_emit`, each function wrapping the `_emit` function call needed to add data for the event types referenced/indicated by the function names.
 
@@ -356,9 +356,9 @@ class EventLogger:
             "disruption_id": disruption_id,
         }, item_id=item_id, entity_id=order_id)
 
-    # ------------------------------------------------------------------
+    #====================================
     # Reorder decisions
-    # ------------------------------------------------------------------
+    #====================================
 
     # NOTE: Detailed docstrings are not given for the following as they are simply wrappers for `_emit`, each function wrapping the `_emit` function call needed to add data for the event types referenced/indicated by the function names.
 
@@ -408,9 +408,9 @@ class EventLogger:
             "disruption_id":      disruption_id,
         }, item_id=item_id, entity_id=order_id)
 
-    # ------------------------------------------------------------------
+    #====================================
     # Disruptions
-    # ------------------------------------------------------------------
+    #====================================
 
     # NOTE: Detailed docstrings are not given for the following as they are simply wrappers for `_emit`, each function wrapping the `_emit` function call needed to add data for the event types referenced/indicated by the function names.
 
@@ -438,9 +438,9 @@ class EventLogger:
             "disruption_id": disruption_id,
         }, item_id=item_id, entity_id=disruption_id)
 
-    # ------------------------------------------------------------------
+    #====================================
     # Costs
-    # ------------------------------------------------------------------
+    #====================================
 
     # NOTE: Detailed docstrings are not given for the following as they are simply wrappers for `_emit`, each function wrapping the `_emit` function call needed to add data for the event types referenced/indicated by the function names.
 
@@ -462,9 +462,9 @@ class EventLogger:
             "tick_total":        tick_total,
         }, item_id=item_id)
 
-    # ------------------------------------------------------------------
+    #====================================
     # Budget
-    # ------------------------------------------------------------------
+    #====================================
 
     # NOTE: Detailed docstrings are not given for the following as they are simply wrappers for `_emit`, each function wrapping the `_emit` function call needed to add data for the event types referenced/indicated by the function names.
 
@@ -491,9 +491,9 @@ class EventLogger:
             "remaining_budget": remaining_budget,
         })
 
-    # ------------------------------------------------------------------
+    #====================================
     # Executor - all stale contexts
-    # ------------------------------------------------------------------
+    #====================================
 
     # NOTE: Detailed docstrings are not given for the following as they are simply wrappers for `_emit`, each function wrapping the `_emit` function call needed to add data for the event types referenced/indicated by the function names.
     
@@ -515,9 +515,9 @@ class EventLogger:
             },
         )
 
-    # ------------------------------------------------------------------
+    #====================================
     # LLM fallbacks
-    # ------------------------------------------------------------------
+    #====================================
 
     def fallback_structural(
         self,
@@ -545,9 +545,9 @@ class EventLogger:
             payload    = {"violations": violations},
         )
 
-# ---------------------------------------------------------------------------
+#################################################
 # Standalone row builder (no Spark - used by tests and engine internals)
-# ---------------------------------------------------------------------------
+#################################################
 
 def build_event_row(
     sim_id:     str,

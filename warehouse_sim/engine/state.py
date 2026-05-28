@@ -46,9 +46,9 @@ from ..config.models import SimWorld
 if TYPE_CHECKING:
     from pyspark.sql import SparkSession
 
-# ---------------------------------------------------------------------------
+#################################################
 # Catalog / table
-# ---------------------------------------------------------------------------
+#################################################
 
 CATALOG = "hackathon_of_the_century"
 _TABLE  = f"{CATALOG}.tables4ops.ops_warehouse_state"
@@ -63,9 +63,9 @@ _SCHEMA = '''
     updated_at                  TIMESTAMP
 '''
 
-# ---------------------------------------------------------------------------
+#################################################
 # Stock state dataclass (in-memory per tick)
-# ---------------------------------------------------------------------------
+#################################################
 
 @dataclass
 class StockState:
@@ -84,9 +84,9 @@ class StockState:
     stock_in_transit:            int   # updated when orders placed/arrive
     expected_arrivals_next_tick: int   # units due to arrive at tick+1
 
-# ---------------------------------------------------------------------------
+#################################################
 # Core logic (pure Python - no Spark)
-# ---------------------------------------------------------------------------
+#################################################
 
 def apply_arrivals(state: StockState, arrived_qty: int) -> None:
     '''
@@ -145,9 +145,9 @@ def apply_new_order(state: StockState, order_qty: int) -> None:
 
     state.stock_in_transit += order_qty
 
-# ---------------------------------------------------------------------------
+#################################################
 # Spark reads and writes
-# ---------------------------------------------------------------------------
+#################################################
 
 def initialise_states(world: SimWorld) -> dict[str, StockState]:
     '''

@@ -56,9 +56,9 @@ class PatternSampler:
     def __init__(self, seed: int) -> None:
         self._rng = np.random.default_rng(seed)
 
-    # ------------------------------------------------------------------
+    #====================================
     # Public API
-    # ------------------------------------------------------------------
+    #====================================
 
     def sample(self, pattern: Pattern, tick: int) -> int:
         '''
@@ -98,9 +98,9 @@ class PatternSampler:
 
         return float(self._rng.uniform())
 
-    # ------------------------------------------------------------------
+    #====================================
     # Internal helpers
-    # ------------------------------------------------------------------
+    #====================================
 
     def _base_value(self, pattern: Pattern, tick: int) -> float:
         if pattern.pattern_type == PatternType.CUSTOM:

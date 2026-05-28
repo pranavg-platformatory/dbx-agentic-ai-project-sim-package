@@ -17,9 +17,9 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
-# ---------------------------------------------------------------------------
+#################################################
 # Enumerators
-# ---------------------------------------------------------------------------
+#################################################
 
 class RunMode(str, Enum):
     FINITE   = "finite"
@@ -70,9 +70,9 @@ class AgentDecision(str, Enum):
     HOLD    = "hold"
 
 
-# ---------------------------------------------------------------------------
+#################################################
 # Environment models
-# ---------------------------------------------------------------------------
+#################################################
 
 class SimConfig(BaseModel):
     '''Maps to the table "env_sim_config" (catalog and schema are specified in the module `config/loader.py`).'''
@@ -211,9 +211,9 @@ class DisruptionSchedule(BaseModel):
         return self
 
 
-# ---------------------------------------------------------------------------
+#################################################
 # World: resolved per-sim view (convenience container, not a DB table)
-# ---------------------------------------------------------------------------
+#################################################
 
 class SimWorld(BaseModel):
     '''

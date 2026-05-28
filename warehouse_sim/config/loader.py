@@ -41,9 +41,9 @@ from warehouse_sim.config.models import (
 if TYPE_CHECKING:
     from pyspark.sql import SparkSession
 
-# ---------------------------------------------------------------------------
+#################################################
 # Catalog / schema constants - adjust if your Databricks paths differ
-# ---------------------------------------------------------------------------
+#################################################
 
 CATALOG = "hackathon_of_the_century"
 ENV     = f"{CATALOG}.tables4env"
@@ -71,9 +71,9 @@ def _get_fully_qualified_table_name(name: str) -> str:
     
     return f"{ENV}.{name}"
 
-# ---------------------------------------------------------------------------
+#################################################
 # Internal helpers
-# ---------------------------------------------------------------------------
+#################################################
 
 def _rows(spark: "SparkSession", table: str, sim_id: str) -> list[dict]:
     '''
@@ -152,9 +152,9 @@ def _parse_dist_params(raw: str | dict | None) -> dict | None:
     return json.loads(raw)
 
 
-# ---------------------------------------------------------------------------
+#################################################
 # Public API
-# ---------------------------------------------------------------------------
+#################################################
 
 def load_world(spark: "SparkSession", sim_id: str) -> SimWorld:
     '''

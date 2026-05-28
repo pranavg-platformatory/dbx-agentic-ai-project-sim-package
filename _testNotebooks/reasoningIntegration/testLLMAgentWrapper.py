@@ -1197,9 +1197,9 @@ from warehouse_sim.config.models import (
 from warehouse_sim.world.setup import write_world
 from datetime import datetime, timezone
 
-# ---------------------------------------------------------------------------
+#################################################
 # Shared world definition
-# ---------------------------------------------------------------------------
+#################################################
 # One supplier covers both items; one consumer demands both items.
 # Flat Poisson demand (mu=10) gives non-trivial but predictable behaviour.
 # Deterministic lead time (variability=0) keeps T8 reproducibility clean.

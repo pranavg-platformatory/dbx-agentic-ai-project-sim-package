@@ -5,7 +5,7 @@
 # MAGIC Polls the Delta tables written by the agent runner notebook and re-renders a composite plot in real time. Has no dependency on the simulation engine - it only reads tables.
 # MAGIC
 # MAGIC **Run simultaneously with**:
-# MAGIC [`continuousSim-agentRunner.py`](./continuousSim-agentRunner.py) in a separate tab. This notebook can be started before, during, or after the runner - it renders whatever data is in the tables at each poll interval.
+# MAGIC [`integrationTest-2-continuousSim-agentRunner.py`](./integrationTest-2-continuousSim-agentRunner.py) in a separate tab. This notebook can be started before, during, or after the runner - it renders whatever data is in the tables at each poll interval.
 # MAGIC
 # MAGIC **Stop** by clicking **Interrupt**. An optional final static render runs
 # MAGIC in Section 4 after the poll loop exits.

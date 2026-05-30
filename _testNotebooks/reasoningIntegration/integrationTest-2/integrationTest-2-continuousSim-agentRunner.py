@@ -6,7 +6,7 @@
 # MAGIC
 # MAGIC **Stop the simulation** by clicking **Interrupt** in the notebook toolbar. `ContinuousRunner` catches the interruption, writes `SIM_ENDED`, and prints a final summary before exiting cleanly.
 # MAGIC
-# MAGIC **Run simultaneously with**: [`continuousSim-liveDashboard.py`](./continuousSim-liveDashboard.py) - open in a separate tab, pointing at the same `SIM_ID`, to watch the simulation in real time. The dashboard notebook has no dependency on this one beyond the shared `SIM_ID` and the Delta tables it writes to.
+# MAGIC **Run simultaneously with**: [`integrationTest-2-continuousSim-liveDashboard.py`](./integrationTest-2-continuousSim-liveDashboard.py) - open in a separate tab, pointing at the same `SIM_ID`, to watch the simulation in real time. The dashboard notebook has no dependency on this one beyond the shared `SIM_ID` and the Delta tables it writes to.
 # MAGIC
 # MAGIC ---
 # MAGIC
@@ -377,7 +377,7 @@ else:
 # MAGIC - Live console progress line every `PRINT_EVERY_N_TICKS` ticks
 # MAGIC - Graceful `KeyboardInterrupt` handling: `SIM_ENDED` is always written before the cell exits, so the event log is complete regardless of when you stop the simulation
 # MAGIC
-# MAGIC Open [`continuousSim-liveDashboard.py`](./continuousSim-liveDashboard.py) in a separate tab with the same `SIM_ID` to watch the simulation live while this cell is running.
+# MAGIC Open [`integrationTest-2-continuousSim-liveDashboard.py`](./integrationTest-2-continuousSim-liveDashboard.py) in a separate tab with the same `SIM_ID` to watch the simulation live while this cell is running.
 
 # COMMAND ----------
 

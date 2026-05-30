@@ -85,6 +85,7 @@
     - [*The detection query*](#the-detection-query)
     - [*Responsibility boundary*](#responsibility-boundary)
   - [Section Map](#section-map)
+  - [Implementation](#implementation)
   - [Completion Status](#completion-status-3)
  
 ---
@@ -1054,11 +1055,22 @@ Section 6  Agent selection              unchanged
 Section 7  Run                          unchanged
 ```
 
----
+## Implementation
+**See**: [`_testNotebooks/reasoningIntegration/integrationTest-3/integrationTest-3-continuousSim-agentRunner.py`](./_testNotebooks/reasoningIntegration/integrationTest-3/integrationTest-3-continuousSim-agentRunner.py)
+
+Here's a precise account of every change made:
+
+**Section 3 - replaced.** The data wipe cell and its markdown are gone. The new Section 3 is the prior state detection cell. The markdown explains clearly why no wipe occurs and where responsibility for state management actually lives. The detection query (MAX(tick) from the table `ops_warehouse_state`) produces `_has_prior_state` and `_max_tick_row`, and prints a clear boot-time message - fresh run or warm-start, and which tick the runner will resume from.
+
+**Section 4 - conditional.** The SimWorld definition and write_world call are now wrapped in if `_has_prior_state` / else. On warm-start the block prints a single line and exits. On fresh start, the original code runs exactly as before - nothing inside the world definition is touched. The markdown is updated to describe both paths.
+
+**Section 7 markdown - one sentence added.** A short note that on warm-start the runner resumes automatically and no action is needed here. The `runner.run()` call itself is unchanged.
+
+*Everything else - parameters, imports, agent selection, runner construction - is byte-for-byte identical to the original.*
 
 ## Completion Status
 
 ```
-  Section 3 removal                          ← pending implementation
-  Section 4 write_world conditional          ← pending implementation
+✓  Section 3 removal
+✓  Section 4 write_world conditional
 ```

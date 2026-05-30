@@ -16,7 +16,7 @@
 # MAGIC
 # MAGIC ---
 # MAGIC
-# MAGIC **Plot structure** (four stacked subplots, shared x-axis):
+# MAGIC **Plot structure** (4 subplots, shared x-axis; exact arrangement is open to change):
 # MAGIC 1. Stock on hand + demand + reorder markers
 # MAGIC 2. Demand fulfilment: fulfilled vs. unmet, stockout ticks shaded
 # MAGIC 3. Disruptions: effective magnitude per tick per disruption

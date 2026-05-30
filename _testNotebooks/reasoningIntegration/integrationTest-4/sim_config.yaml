@@ -1,0 +1,131 @@
+# sim_config.yaml
+#
+# - Single source of truth for the continuous simulation
+# - Loaded by both the agent runner and the live dashboard notebooks
+#
+# Shared keys (read by both notebooks):
+#   sim_id, catalog
+#
+# Runner-only keys (read by the agent runner):
+#   agent, simulation, llm_agent, world
+#
+# Dashboard-only keys (POLL_INTERVAL_SECONDS, MAX_TICKS_TO_SHOW) are intentionally absent - they control display behaviour only and have no bearing on the simulation.
+
+# ── Shared ────────────────────────────────────────────────────────────────────
+
+sim_id:  "sim_continuous_001"
+catalog: "hackathon_of_the_century"
+
+# ── Agent ─────────────────────────────────────────────────────────────────────
+
+agent:
+  # "rule_based" : RuleBasedAgent - deterministic, no external dependencies
+  # "llm"        : LLMAgentWrapper with LLMReorderAgent - live LLM calls
+  type: "llm"
+
+# ── Simulation ────────────────────────────────────────────────────────────────
+
+simulation:
+  run_mode:              "infinite"   # "infinite" or "cyclic"
+  tick_unit:             "hour"       # "hour", "day", or "week" (cosmetic; passed to SimConfig)
+  tick_duration_seconds: 3.0          # wall-clock seconds per tick; null = full speed
+  print_every_n_ticks:   1
+  seed:                  42
+
+# ── LLM agent (ignored when agent.type = "rule_based") ───────────────────────
+
+llm_agent:
+  executor_trigger_n:  4             # executor dispatches every N ticks
+  package_path:        "/Workspace/Shared/reorder-llm-agent"
+  config_override:     {}            # e.g. warehouse_id, llm_endpoint
+
+# ── World definition ──────────────────────────────────────────────────────────
+
+world:
+
+  items:
+    item_A:
+      name:                          "Widget A"
+      unit_value:                    5.0
+      initial_stock:                 80
+      reorder_point:                 25
+      min_order_qty:                 20
+      max_order_qty:                 150
+      holding_cost_per_unit_per_tick:  0.05
+      stockout_cost_per_unit_per_tick: 2.0
+      order_fixed_cost:              50.0
+      order_variable_cost_per_unit:  4.5
+      transit_loss_cost_per_unit:    6.0
+
+    item_B:
+      name:                          "Gadget B"
+      unit_value:                    12.0
+      initial_stock:                 40
+      reorder_point:                 15
+      min_order_qty:                 10
+      max_order_qty:                 80
+      holding_cost_per_unit_per_tick:  0.10
+      stockout_cost_per_unit_per_tick: 5.0
+      order_fixed_cost:              30.0
+      order_variable_cost_per_unit:  10.0
+      transit_loss_cost_per_unit:    15.0
+
+  suppliers:
+    sup_001:
+      name:                 "Acme Corp"
+      base_lead_time_ticks: 3
+      lead_time_variability: 0.5
+
+    sup_002:
+      name:                 "Globex Ltd"
+      base_lead_time_ticks: 4
+      lead_time_variability: 1.0
+
+  consumers:
+    con_001:
+      name: "Retail Division"
+
+  supplier_item_map:
+    item_A: "sup_001"
+    item_B: "sup_002"
+
+  consumer_item_map:
+    item_A: "con_001"
+    item_B: "con_001"
+
+  demand_patterns:
+    item_A:
+      pattern_type:    "custom"       # "custom" or "statistical"
+      custom_schedule: [10.0, 15.0, 20.0, 12.0, 8.0]   # 5-tick repeating cycle
+      noise_std:       2.0
+
+    item_B:
+      pattern_type:  "statistical"
+      distribution:  "poisson"
+      dist_params:
+        mu: 8
+      noise_std:     0.0
+
+  disruptions:
+    - disruption_id:       "dis_spike_A"
+      item_id:             "item_A"
+      disruption_type:     "demand_spike"
+      start_tick:          10
+      end_tick:            999999
+      magnitude:           2.5
+      is_stochastic:       true
+      trigger_probability: 0.40
+
+    - disruption_id:       "dis_delay_B"
+      item_id:             "item_B"
+      disruption_type:     "transit_delay"
+      start_tick:          20
+      end_tick:            999999
+      magnitude:           1.5
+      is_stochastic:       true
+      trigger_probability: 0.25
+
+  sim_config:
+    budget_limit:               null   # null = unlimited; hard cap not meaningful for open-ended runs
+    budget_warning_threshold:   0.10
+    agent_history_window_ticks: 10

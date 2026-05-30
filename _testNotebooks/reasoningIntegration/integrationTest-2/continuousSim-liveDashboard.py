@@ -2,14 +2,10 @@
 # MAGIC %md
 # MAGIC # Continuous Simulation - Live Dashboard
 # MAGIC
-# MAGIC Polls the Delta tables written by the agent runner notebook and re-renders
-# MAGIC a composite plot in real time. Has no dependency on the simulation engine -
-# MAGIC it only reads tables.
+# MAGIC Polls the Delta tables written by the agent runner notebook and re-renders a composite plot in real time. Has no dependency on the simulation engine - it only reads tables.
 # MAGIC
 # MAGIC **Run simultaneously with**:
-# MAGIC [`continuousSim-agentRunner.py`](./continuousSim-agentRunner.py) in a
-# MAGIC separate tab. This notebook can be started before, during, or after the
-# MAGIC runner - it renders whatever data is in the tables at each poll interval.
+# MAGIC [`continuousSim-agentRunner.py`](./continuousSim-agentRunner.py) in a separate tab. This notebook can be started before, during, or after the runner - it renders whatever data is in the tables at each poll interval.
 # MAGIC
 # MAGIC **Stop** by clicking **Interrupt**. An optional final static render runs
 # MAGIC in Section 4 after the poll loop exits.
@@ -87,18 +83,13 @@ print("Imports resolved.")
 # MAGIC **This cell runs indefinitely until you click Interrupt.**
 # MAGIC
 # MAGIC Each iteration:
-# MAGIC 1. Queries all source tables for this `SIM_ID`, optionally limited to the
-# MAGIC    last `MAX_TICKS_TO_SHOW` ticks
+# MAGIC 1. Queries all source tables for this `SIM_ID`, optionally limited to the last `MAX_TICKS_TO_SHOW` ticks
 # MAGIC 2. Clears the previous cell output and re-renders the composite figure
 # MAGIC 3. Sleeps for `POLL_INTERVAL_SECONDS`
 # MAGIC
-# MAGIC If the runner has not started yet (no rows in the tables), the dashboard
-# MAGIC prints a waiting message and retries. It does not require the runner to be
-# MAGIC active - it renders whatever data exists at each poll.
+# MAGIC If the runner has not started yet (no rows in the tables), the dashboard prints a waiting message and retries. It does not require the runner to be active - it renders whatever data exists at each poll.
 # MAGIC
-# MAGIC **Display behaviour**: `IPython.display.clear_output(wait=True)` replaces
-# MAGIC the previous figure output with the new one in place, rather than appending
-# MAGIC a new figure on each poll.
+# MAGIC **Display behaviour**: `IPython.display.clear_output(wait=True)` replaces the previous figure output with the new one in place, rather than appending a new figure on each poll.
 
 # COMMAND ----------
 
@@ -116,8 +107,7 @@ def _fetch_data(sim_id: str, max_ticks: int | None) -> dict[str, pd.DataFrame]:
     '''
 
     # Resolve the rolling window bounds from the latest tick in ops_warehouse_state.
-    # This table is written every tick, so its MAX(tick) is the most reliable
-    # proxy for "how far the simulation has progressed".
+    # This table is written every tick, so its MAX(tick) is the most reliable proxy for "how far the simulation has progressed".
     tick_range_rows = spark.sql(f'''
         SELECT MAX(tick) AS max_tick
         FROM {CATALOG}.tables4ops.ops_warehouse_state
@@ -158,8 +148,7 @@ def _fetch_data(sim_id: str, max_ticks: int | None) -> dict[str, pd.DataFrame]:
     ''').toPandas()
 
     # ── Stockout events ──────────────────────────────────────────────────────
-    # Fetched from event_log rather than hist_demand_actuals to get the exact
-    # ticks the engine flagged as stockouts (unmet_demand > 0 after demand draw).
+    # Fetched from event_log rather than hist_demand_actuals to get the exact ticks the engine flagged as stockouts (unmet_demand > 0 after demand draw).
     df_stockouts = spark.sql(f'''
         SELECT tick,
                item_id,
@@ -276,8 +265,7 @@ def _render(data: dict, sim_id: str, poll_count: int) -> None:
     )
 
     # ─────────────────────────────────────────────────────────────────────────
-    # Subplot 1: Stock on hand (left axis) + disrupted demand (right axis)
-    #            + reorder markers
+    # Subplot 1: Stock on hand (left axis) + disrupted demand (right axis) + reorder markers
     # ─────────────────────────────────────────────────────────────────────────
     ax1.set_title("Stock on Hand & Demand", fontsize=10, loc="left")
     ax1_r = ax1.twinx()   # right axis for demand
@@ -315,8 +303,7 @@ def _render(data: dict, sim_id: str, poll_count: int) -> None:
     ax1.grid(axis="y", alpha=0.3)
 
     # Annotate with reorder-point lines per item (horizontal reference lines)
-    # NOTE: reorder_point is not in the Delta tables; omitted to avoid requiring
-    # a join to env_item_types. Add if needed.
+    # NOTE: reorder_point is not in the Delta tables; omitted to avoid requiring a join to env_item_types. Add if needed.
 
     # ─────────────────────────────────────────────────────────────────────────
     # Subplot 2: Demand fulfilment - fulfilled vs. unmet
@@ -395,10 +382,9 @@ def _render(data: dict, sim_id: str, poll_count: int) -> None:
             bottoms += vals
 
     # Cumulative total as a step line on the right axis
-    # NOTE: _cumulative holds the latest cumulative_total_cost per item.
-    # Sum across items to get the run-level total. Because _cumulative only
-    # has the single latest row per item (not per tick), we build a running
-    # sum from df_costs instead, which has per-tick per-item data.
+    # NOTE:
+    # - _cumulative holds the latest cumulative_total_cost per item
+    # - Sum across items to get the run-level total. Because _cumulative only has the single latest row per item (not per tick), we build a running sum from df_costs instead, which has per-tick per-item data
     if not df_costs.empty:
         running_total = (
             df_costs.groupby("tick")[COST_COLS]
@@ -443,9 +429,7 @@ def _render(data: dict, sim_id: str, poll_count: int) -> None:
 #   2. Clear previous output and re-render the figure
 #   3. Sleep POLL_INTERVAL_SECONDS
 #
-# NOTE: clear_output(wait=True) replaces the previous figure output with the
-# new one in place rather than appending. Without it, each poll appends a new
-# figure to the cell output, which quickly becomes unwieldy.
+# NOTE: clear_output(wait=True) replaces the previous figure output with the new one in place rather than appending. Without it, each poll appends a new figure to the cell output, which quickly becomes unwieldy.
 
 poll_count   = 0
 waiting_shown = False
@@ -482,8 +466,7 @@ except KeyboardInterrupt:
 # MAGIC %md
 # MAGIC ## 4. Final static render (run after Interrupt)
 # MAGIC
-# MAGIC Renders the plot one final time against whatever data exists in the tables.
-# MAGIC Does not poll - fetches once and renders.
+# MAGIC Renders the plot one final time against whatever data exists in the tables. Does not poll - fetches once and renders.
 
 # COMMAND ----------
 

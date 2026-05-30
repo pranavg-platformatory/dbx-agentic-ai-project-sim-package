@@ -41,7 +41,7 @@
  
 import yaml
  
-_CONFIG_PATH = "/Workspace/Repos/mistermilvusmigrans@gmail.com/dbx-agentic-ai-project-sim-package/sim_config.yaml"
+_CONFIG_PATH = "/Workspace/Repos/mistermilvusmigrans@gmail.com/dbx-agentic-ai-project-sim-package/_testNotebooks/reasoningIntegration/integrationTest-4/sim_config.yaml"
  
 with open(_CONFIG_PATH, "r") as _f:
     _cfg = yaml.safe_load(_f)

@@ -87,6 +87,13 @@
   - [Section Map](#section-map)
   - [Implementation](#implementation)
   - [Completion Status](#completion-status-3)
+- [Notebook Configuration: YAML-Based Parameter Management](#notebook-configuration-yaml-based-parameter-management)
+  - [Context](#context-3)
+  - [What Changed](#what-changed)
+  - [`sim_config.yaml`](#sim_configyaml)
+  - [Agent runner: Sections 1 and 4](#agent-runner-sections-1-and-4)
+  - [Dashboard: Section 1](#dashboard-section-1)
+  - [Completion Status](#completion-status-4)
  
 ---
 
@@ -1073,4 +1080,62 @@ Here's a precise account of every change made:
 ```
 ✓  Section 3 removal
 ✓  Section 4 write_world conditional
+```
+
+# Notebook Configuration: YAML-Based Parameter Management
+> A functionally identical improvement upon [`_testNotebooks/reasoningIntegration/integrationTest-3`](./_testNotebooks/reasoningIntegration/integrationTest-3/)
+
+**Files affected**:
+
+- [`_testNotebooks/reasoningIntegration/integrationTest-4/integrationTest-4-continuousSim-agentRunner.py`](./_testNotebooks/reasoningIntegration/integrationTest-4/integrationTest-4-continuousSim-agentRunner.py)
+- [`_testNotebooks/reasoningIntegration/integrationTest-4/integrationTest-4-continuousSim-liveDashboard.py`](./_testNotebooks/reasoningIntegration/integrationTest-4/integrationTest-4-continuousSim-liveDashboard.py)
+- [`_testNotebooks/reasoningIntegration/integrationTest-4/sim_config.yaml`](./_testNotebooks/reasoningIntegration/integrationTest-4/sim_config.yaml)
+
+## Context
+
+With warm-start in place (see *Running Simulation as a Job* and *Notebook Design: Agent Runner Warm-Start Adaptation*), the two notebooks are correct and stable. The remaining friction is that `SIM_ID`, `CATALOG`, and all world definition parameters were hardcoded independently in each notebook. For a shared simulation run - where both notebooks must point at the same `SIM_ID` and `CATALOG` - this creates a dual-maintenance problem and a silent failure mode: a `SIM_ID` mismatch between runner and dashboard produces no error, just a dashboard that displays nothing.
+
+A single YAML file resolves this. It is the only place these values live.
+
+## What Changed
+
+The changes are confined to Section 1 of both notebooks and Section 4 of the agent runner. Every other section - dependencies, imports, path setup, prior state detection, world load, agent selection, runner construction, the run cell - is identical to the warm-start notebook versions documented in *Notebook Design: Agent Runner Warm-Start Adaptation*. Nothing in the simulation engine, agent layer, or event log is affected.
+
+## `sim_config.yaml`
+
+**File**: `sim_config.yaml`
+
+Single source of truth for the continuous simulation. Organised into five top-level keys:
+
+- `sim_id`, `catalog` - shared; read by both notebooks
+- `agent`, `simulation`, `llm_agent` - runner-only; control agent type, tick pacing, and LLM configuration
+- `world` - runner-only; full world definition (items, suppliers, consumers, demand patterns, disruptions, sim config scalars)
+
+**KEY POINTS**:
+
+- `disruption_id` values in the YAML are stored without the `SIM_ID` prefix. The prefix is applied at construction time in Section 4, consistent with the original pattern
+- `DisruptionType` and `Distribution` enum values are stored as lowercase strings for readability; uppercased at construction time to match enum member names
+- `budget_limit: null` maps to Python `None` via `yaml.safe_load`, which is the correct value for an unlimited continuous run
+- Dashboard display parameters (`POLL_INTERVAL_SECONDS`, `MAX_TICKS_TO_SHOW`) are intentionally absent - they govern polling behaviour only and have no bearing on the simulation
+
+## Agent runner: Sections 1 and 4
+
+**File**: `integrationTest-4-continuousSim-agentRunner.py`
+
+**Section 1**: hardcoded parameter assignments replaced with a `yaml.safe_load` call. All variables (`SIM_ID`, `CATALOG`, `AGENT_TYPE`, `RUN_MODE`, `TICK_UNIT`, `TICK_DURATION_SECONDS`, `PRINT_EVERY_N_TICKS`, `SIM_SEED`, `EXECUTOR_TRIGGER_N`, `LLM_AGENT_PACKAGE_PATH`, `LLM_AGENT_CONFIG_OVERRIDE`) are now read from `_cfg`. Downstream cells are unchanged - they reference the same variable names as before.
+
+**Section 4**: `SimWorld` construction is now driven by `_cfg["world"]`. Items, suppliers, consumers, maps, demand patterns, disruptions, and sim config scalars are all read from the YAML. The `_has_prior_state` conditional and the warm-start skip path are unchanged.
+
+## Dashboard: Section 1
+
+**File**: `integrationTest-4-continuousSim-liveDashboard.py`
+
+**Section 1**: `SIM_ID` and `CATALOG` are read from the YAML. `POLL_INTERVAL_SECONDS` and `MAX_TICKS_TO_SHOW` remain hardcoded locally - they are dashboard-local display parameters with no shared concern.
+
+## Completion Status
+
+```
+✓ sim_config.yaml                  Single source of truth for sim_id, catalog, world definition
+✓ continuousSim-agentRunner.py     Sections 1 and 4 driven by YAML
+✓ continuousSim-liveDashboard.py   Section 1 reads sim_id and catalog from YAML
 ```

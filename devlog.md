@@ -65,6 +65,18 @@
 - [Integration Tests](#integration-tests)
 - [IT1: Rule-Based vs. LLM Agent (Finite Ticks)](#it1-rule-based-vs-llm-agent-finite-ticks)
   - [IT2: Continuous Simulation](#it2-continuous-simulation)
+- [Running Simulation as a Job - Part 1: Package-Focused](#running-simulation-as-a-job---part-1-package-focused)
+  - [Context](#context-1)
+  - [Design Decisions](#design-decisions)
+  - [Development Notes](#development-notes-2)
+    - [`engine/costs.py` - `fetch_current_cost_states`](#enginecostspy---fetch_current_cost_states)
+    - [`engine/runner.py` - warm-start branch in `_initialise` and `_detect_resume_tick`](#enginerunnerpy---warm-start-branch-in-_initialise-and-_detect_resume_tick)
+    - [`engine/continuous.py` - tick loop start](#enginecontinuouspy---tick-loop-start)
+    - [`event_log/event_log.py` - `SIM_RESUMED` event](#event_logevent_logpy---sim_resumed-event)
+  - [Notebook Change (TO DO)](#notebook-change-to-do)
+  - [Completion Status](#completion-status-2)
+  - [Summary](#summary)
+- [Running Simulation as a Job - Part 2: Notebook-Focused](#running-simulation-as-a-job---part-2-notebook-focused)
  
 ---
 
@@ -793,3 +805,153 @@ Two notebooks meant to run simultaneously in separate browser tabs. They are dec
 The dashboard can be started before, during, or after the runner. If no data exists yet for the `SIM_ID`, it prints a waiting message and retries each poll interval.
 
 **Note on `TICK_DURATION_SECONDS`**: for a meaningful live feed, the runner should be paced at 2–5 seconds per tick. At full speed the dashboard sees large bursts of ticks per poll rather than a stream, which makes the plots less informative in real time.
+
+# Running Simulation as a Job - Part 1: Package-Focused
+
+**Affected files**:
+
+- [`warehouse_sim/engine/runner.py`](./warehouse_sim/engine/runner.py)
+- [`warehouse_sim/engine/continuous.py`](./warehouse_sim/engine/continuous.py)
+- [`warehouse_sim/engine/costs.py`](./warehouse_sim/engine/costs.py)
+- [`warehouse_sim/event_log/event_log.py`](./warehouse_sim/event_log/event_log.py)
+
+## Context
+
+The continuous simulation was originally designed to run interactively inside a Databricks notebook, paced and stopped manually via the kernel interrupt. For accumulating data over extended periods (24+ hours) without supervision, this is inadequate: notebook sessions can be preempted, clusters recycled, and a manual restart under the existing design would wipe all accumulated data via Section 3 of the agent runner notebook.
+
+The goal of this work is to make the simulation safe to run as a long-lived, unattended Databricks Job - and, specifically, to make any restart (planned or unplanned) non-destructive. The presentation layer (live dashboard) is decoupled from the runner by design and requires no changes. The work is scoped to **warm-start state recovery only**. Job-ification (cluster config, retry policy, entry point conversion) is a separate concern addressed at the infrastructure layer and is not covered here.
+
+## Design Decisions
+
+**1. Auto-detection, not a flag.**
+
+Warm-start detection is built into the runner itself (`_initialise()`), not controlled by a notebook parameter or a caller-supplied flag. The runner queries `MAX(tick)` from `ops_warehouse_state` at startup and branches accordingly. This means the notebook requires no modification to benefit from warm-start - the correct path is always taken automatically, regardless of whether the run is fresh or resumed.
+
+**2. `SIM_ID` is fixed across restarts.**
+
+All data for a simulation accumulates under a single `SIM_ID`. The wipe logic in Section 3 of the agent runner notebook is therefore permanently incorrect for this use case and should be removed. The runner's append-only write pattern is unchanged; no existing rows are ever mutated or deleted.
+
+**3. `_total_cost` is restored; `_total_reorders` and `_total_stockout_ticks` are not.**
+
+`_total_cost` feeds into the live progress display (`cost=£...`) and must reflect the full run total to be meaningful. It is restored by summing `cumulative_total` across the recovered `CostState` instances. `_total_reorders` and `_total_stockout_ticks` are session-relative counters used only in the `SIM_ENDED` summary line - restoring them would require additional queries for negligible display benefit, so they reset to zero on each process start.
+
+**4. `SIM_RESUMED` rather than `SIM_STARTED`.**
+
+A new event type distinguishes warm-start sessions from fresh ones in the event log. This matters for post-run analysis: `SIM_STARTED` events mark the absolute beginning of a simulation; `SIM_RESUMED` events mark session boundaries within an ongoing run. The payload carries `resumed_from` (the last completed tick) so session boundaries can be identified precisely.
+
+## Development Notes
+
+### `engine/costs.py` - `fetch_current_cost_states`
+
+**File**: `warehouse_sim/engine/costs.py`
+
+New read function. Queries `ops_cost_accumulator` at `MAX(tick)` per item using the same self-join pattern already established in `fetch_current_states` (`state.py`). Returns a `dict[str, CostState]` with all four cumulative cost components populated.
+
+**KEY POINTS**:
+
+- `remaining_budget` is deliberately excluded from the return value - it is a run-level scalar, not a per-item field, and is handled separately in `_initialise()` (for this simulation it is `None` - no budget cap)
+- The self-join pattern (`INNER JOIN ... ON item_id AND tick = max_tick`) is identical to `fetch_current_states` for consistency; both functions are readable as a pair
+
+---
+
+### `engine/runner.py` - warm-start branch in `_initialise` and `_detect_resume_tick`
+
+**File**: `warehouse_sim/engine/runner.py`
+
+Three changes to `SimRunner`:
+
+**New attribute: `_resume_tick`**
+
+Added to `__init__` alongside the existing in-memory state attributes. Initialised to `0`; set correctly by `_initialise()` before the tick loop begins. This is the single point of truth for where the loop starts - both `SimRunner.run()` and `ContinuousRunner.run()` read from it.
+
+**New method: `_detect_resume_tick`**
+
+Single `MAX(tick)` query against `ops_warehouse_state` for this `sim_id`. Returns `None` if no rows exist (fresh run) or the integer tick value if prior data is found. Called once at the top of `_initialise()`; never called mid-run.
+
+**Rewritten method: `_initialise`**
+
+Branches on the result of `_detect_resume_tick`:
+
+```
+Fresh start (None returned):
+  _stock_states  ← initialise_states(world)          [from initial_stock]
+  _cost_states   ← zeroed CostState per item
+  _resume_tick   ← 0
+  event          ← SIM_STARTED
+  write tick-0 warehouse state row
+
+Warm-start (tick N returned):
+  _stock_states  ← fetch_current_states(spark, sim_id)
+  _cost_states   ← fetch_current_cost_states(spark, sim_id)
+  _total_cost    ← sum(cs.cumulative_total for cs in _cost_states.values())
+  _resume_tick   ← N + 1
+  event          ← SIM_RESUMED(tick=N+1, resumed_from=N)
+  tick-0 write   ← skipped (data already exists)
+```
+
+The fresh-start path is byte-for-byte identical to the original `_initialise()` - no existing behaviour is changed.
+
+**`run()` tick loop start**
+
+Changed `tick = 0` to `tick = self._resume_tick`. A one-line change; the rest of the loop is unchanged.
+
+### `engine/continuous.py` - tick loop start
+
+**File**: `warehouse_sim/engine/continuous.py`
+
+The only change is `tick = 0` → `tick = self._resume_tick` in `ContinuousRunner.run()`. `_initialise()` is inherited from `SimRunner` and sets `_resume_tick` correctly before the loop begins, so no further changes are needed here. Apart from this, a note was added to the module docstring and the `run()` docstring explaining that warm-start is inherited rather than implemented locally.
+
+### `event_log/event_log.py` - `SIM_RESUMED` event
+
+**File**: `warehouse_sim/event_log/event_log.py`
+
+Two additions:
+
+**`EVENT_TYPES` set**: `"SIM_RESUMED"` added alongside `"SIM_STARTED"` and `"SIM_ENDED"`.
+
+**New method: `sim_resumed`**
+
+```python
+def sim_resumed(self, tick: int, resumed_from: int, config_snapshot: dict) -> None
+```
+
+Follows the same pattern as `sim_started`. Payload:
+- `resumed_from` - the last tick that completed in the previous session (`MAX(tick)` from `ops_warehouse_state`)
+- `config_snapshot` - identical structure to `sim_started`, for consistency
+
+`tick` in the row is the first tick that will execute in this session (`resumed_from + 1`), consistent with how `SIM_STARTED` uses tick `0`.
+
+## Notebook Change (TO DO)
+
+**File**: `continuousSim-agentRunner.py`, Section 3
+
+Section 3 (data wipe) should be removed. With warm-start built into the runner, wiping prior data on restart is always the wrong behaviour for a fixed `SIM_ID`. The `write_world` call in Section 4 is idempotent for `tables4env` (world definition tables) and can remain as-is.
+
+## Completion Status
+
+```
+✓ engine/costs.py       fetch_current_cost_states
+✓ engine/runner.py      _detect_resume_tick, _initialise warm-start branch, _resume_tick attribute
+✓ engine/continuous.py  tick loop starts from _resume_tick
+✓ event_log.py          SIM_RESUMED event type and sim_resumed() method
+  Notebook              Section 3 removal                    ← pending
+  Job-ification         Databricks Job config, cluster spec  ← next
+```
+
+---
+
+## Summary
+
+| What | File | Nature of change |
+|---|---|---|
+| `fetch_current_cost_states` | `engine/costs.py` | New function - reads `ops_cost_accumulator` at `MAX(tick)` per item; restores `CostState` on warm-start |
+| `_detect_resume_tick` | `engine/runner.py` | New method - queries `MAX(tick)` from `ops_warehouse_state`; returns `None` for fresh run, tick integer for warm-start |
+| `_resume_tick` attribute | `engine/runner.py` | New attribute on `SimRunner` - tick loop starts here; set by `_initialise()` |
+| `_initialise` | `engine/runner.py` | Extended - fresh-start path unchanged; warm-start branch added; fires `SIM_RESUMED` instead of `SIM_STARTED` |
+| `run` | `engine/runner.py` | One-line change - `tick = 0` → `tick = self._resume_tick` |
+| `run` | `engine/continuous.py` | One-line change - `tick = 0` → `tick = self._resume_tick` |
+| `SIM_RESUMED` in `EVENT_TYPES` | `event_log/event_log.py` | Added to frozenset |
+| `sim_resumed` | `event_log/event_log.py` | New method - fires `SIM_RESUMED` with `resumed_from` and `config_snapshot` in payload |
+| Section 3 (data wipe) | `continuousSim-agentRunner.py` | To be removed - permanently incorrect for a fixed `SIM_ID` with warm-start |
+
+# Running Simulation as a Job - Part 2: Notebook-Focused

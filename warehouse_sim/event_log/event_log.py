@@ -64,6 +64,7 @@ _SCHEMA = '''
 # Valid event types - matches spec section 7, __docs__/simulationSpecs.md in this repo
 EVENT_TYPES = frozenset({
     "SIM_STARTED",
+    "SIM_RESUMED", # fired instead of SIM_STARTED when warm-starting from prior state
     "SIM_ENDED",
     "TICK_STARTED",
     "TICK_ENDED",
@@ -258,6 +259,26 @@ class EventLogger:
 
     def sim_started(self, tick: int, config_snapshot: dict[str, Any]) -> None:
         self._emit(tick, "SIM_STARTED", {"config_snapshot": config_snapshot})
+
+    def sim_resumed(
+        self,
+        tick:            int,
+        resumed_from:    int,
+        config_snapshot: dict[str, Any],
+    ) -> None:
+        '''
+        Fired by `_initialise()` instead of `sim_started` when the runner detects prior state for this `sim_id` and resumes from `resumed_from` tick + 1.
+
+        NOTE:
+        - `tick` is the first tick that will be executed in this session (= `resumed_from + 1`)
+        - `resumed_from` is the last tick that completed in the previous session (= MAX(tick) in the table "ops_warehouse_state")
+        - `config_snapshot` matches the same structure used in `sim_started` for consistency
+        '''
+
+        self._emit(tick, "SIM_RESUMED", {
+            "resumed_from":   resumed_from,
+            "config_snapshot": config_snapshot,
+        })
 
     def sim_ended(
         self,

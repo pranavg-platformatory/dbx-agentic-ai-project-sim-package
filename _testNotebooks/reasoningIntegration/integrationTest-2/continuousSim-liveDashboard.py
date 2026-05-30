@@ -255,12 +255,12 @@ def _render(data: dict, sim_id: str, poll_count: int) -> None:
     DIS_COLOURS  = ["#8C3B3B", "#3B608C", "#3B8C56", "#7A3B8C"]
 
     # ── Figure layout ─────────────────────────────────────────────────────────
-    fig = plt.figure(figsize=(16, 18))
+    fig = plt.figure(figsize=(16, 8))
     gs  = gridspec.GridSpec(
-        4, 1,
+        2, 2,
         figure    = fig,
         hspace    = 0.40,
-        height_ratios = [3, 2, 2, 2],
+        height_ratios = [2, 2],
     )
     ax1 = fig.add_subplot(gs[0])
     ax2 = fig.add_subplot(gs[1], sharex=ax1)
@@ -331,9 +331,8 @@ def _render(data: dict, sim_id: str, poll_count: int) -> None:
         d = df_demand[df_demand["item_id"] == item_id].sort_values("tick")
         ax2.plot(d["tick"], d["fulfilled_demand"],
                  linewidth=1.8, color=colour, label=f"{item_id} fulfilled")
-        # Unmet demand filled to zero - visually distinguishes stockout depth
-        ax2.fill_between(d["tick"], d["unmet_demand"], 0,
-                         color="red", alpha=0.25, label=f"{item_id} unmet" if item_id == items[0] else "")
+        ax2.plot(d["tick"], d["unmet_demand"],
+                 linewidth=1.8, color=colour, label=f"{item_id} unmet", linestyle="--")
 
     ax2.set_ylabel("Units", fontsize=9)
     ax2.legend(loc="upper left", fontsize=8)

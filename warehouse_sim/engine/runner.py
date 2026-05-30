@@ -43,6 +43,22 @@ agent   = RuleBasedAgent()
 runner  = SimRunner(spark, world, agent, logger, sampler)
 runner.run()
 ```
+
+---
+
+WARM-START BEHAVIOUR:
+
+- On construction, the runner checks whether prior data exists for this `sim_id` in the table "ops_warehouse_state"
+- If rows are found, the runner resumes from `MAX(tick) + 1` rather than starting from tick 0
+
+Warm-start vs. fresh-start differences:
+- `_stock_states`  : restored from `fetch_current_states`  (state.py)  instead of `initialise_states`
+- `_cost_states`   : restored from `fetch_current_cost_states` (costs.py) instead of zeroed CostStates
+- `_resume_tick`   : set to MAX(tick) + 1; the tick loop starts here instead of 0
+- Event log        : `SIM_RESUMED` is fired instead of `SIM_STARTED`
+- Tick-0 warehouse state write: skipped (data already exists in the table)
+
+The runner never deletes or mutates existing rows. All writes remain append-only.
 '''
 
 from __future__ import annotations
@@ -83,6 +99,7 @@ from .state import (
     apply_arrivals,
     apply_demand,
     apply_new_order,
+    fetch_current_states,
     initialise_states,
     write_warehouse_state,
 )
@@ -95,6 +112,7 @@ from .costs import (
     compute_stockout_cost,
     compute_transit_loss_cost,
     deduct_budget,
+    fetch_current_cost_states,
     write_cost_accumulator,
     write_cost_by_tick,
 )
@@ -125,6 +143,8 @@ _DECISIONS_SCHEMA = '''
     agent_version                STRING
 '''
 
+_STATE_TABLE = f"{CATALOG}.tables4ops.ops_warehouse_state"
+
 
 #################################################
 # SimRunner
@@ -134,6 +154,10 @@ class SimRunner:
     '''
     Orchestrates the simulation tick loop.
 
+    Automatically detects whether prior data exists for `sim_id` and resumes from the last completed tick if so, or starts fresh from tick 0 otherwise.
+    
+    NOTE: See module docstring for full warm-start behaviour description.
+
     ---
 
     PARAMETERS:
@@ -141,7 +165,7 @@ class SimRunner:
     - `world` (SimWorld): Fully loaded SimWorld (from `load_world`)
     - `agent` (BaseAgent): Any BaseAgent subclass - injected, never imported directly
     - `logger` (EventLogger): EventLogger instance for this sim run
-    - `sampler` (PatternSampler): PatternSampler seeded with world.config.random_see
+    - `sampler` (PatternSampler): PatternSampler seeded with world.config.random_seed
     '''
 
     def __init__(
@@ -160,7 +184,7 @@ class SimRunner:
         self._sim_id  = world.config.sim_id
         self._config  = world.config
 
-        # In-memory state - initialised in run()
+        # In-memory state - initialised in _initialise()
         self._stock_states: dict[str, StockState] = {}
         self._cost_states:  dict[str, CostState]  = {}
         self._remaining_budget: Optional[float]   = world.config.budget_limit
@@ -168,10 +192,13 @@ class SimRunner:
         # Budget warning guard - fire BUDGET_WARNING only once per crossing
         self._budget_warning_fired: bool = False
 
-        # Totals for SIM_ENDED
+        # Totals for SIM_ENDED summary - restored from tables on warm-start
         self._total_reorders:       int   = 0
         self._total_stockout_ticks: int   = 0
         self._total_cost:           float = 0.0
+
+        # Tick to start the loop from - set in _initialise() 0 for a fresh run, MAX(tick) + 1 for a warm-start
+        self._resume_tick: int = 0
 
     #====================================
     # Public entry point
@@ -180,12 +207,15 @@ class SimRunner:
     def run(self) -> None:
         '''
         Execute the simulation.
-        
+
+        Calls _initialise() to set up (or restore) in-memory state, then runs the tick loop starting from self._resume_tick.
+
         NOTE: The simulation runs for `config.num_ticks` ticks when run_mode is 'finite', or forever when 'infinite' or 'cyclic'.
         '''
+
         self._initialise()
 
-        tick = 0
+        tick = self._resume_tick
         while self._should_continue(tick):
             self._run_tick(tick)
             tick += 1
@@ -213,36 +243,110 @@ class SimRunner:
     # Initialisation
     #====================================
 
-    def _initialise(self) -> None:
-        '''Set up in-memory state and fire the event `SIM_STARTED`.'''
+    def _detect_resume_tick(self) -> Optional[int]:
+        '''
+        Query ops_warehouse_state for the maximum tick written for this sim_id.
 
-        self._stock_states = initialise_states(self._world)
-        self._cost_states  = {
-            item_id: CostState(item_id=item_id)
-            for item_id in self._world.items
+        Returns the max tick if prior data exists, or None for a fresh run.
+
+        NOTE:
+        - A result of None means no rows exist: this is a fresh start
+        - A result of N means tick N completed successfully and the next tick to execute is N + 1
+        - Called once at the start of _initialise(); never called mid-run
+        '''
+
+        rows = self._spark.sql(f'''
+            SELECT MAX(tick) AS max_tick
+            FROM {_STATE_TABLE}
+            WHERE sim_id = '{self._sim_id}'
+        ''').collect()
+
+        if not rows or rows[0]["max_tick"] is None:
+            return None
+        return int(rows[0]["max_tick"])
+
+    def _initialise(self) -> None:
+        '''
+        Set up in-memory state and fire the appropriate lifecycle event.
+
+        FRESH START (no prior data for this sim_id):
+        - Builds _stock_states from ItemType.initial_stock via initialise_states()
+        - Initialises _cost_states as zeroed CostState instances
+        - Sets _resume_tick = 0
+        - Fires SIM_STARTED
+        - Writes the tick-0 warehouse state snapshot
+
+        WARM-START (prior data found for this sim_id):
+        - Restores _stock_states from ops_warehouse_state via fetch_current_states()
+        - Restores _cost_states from ops_cost_accumulator via fetch_current_cost_states()
+        - Restores _total_cost from the restored cost states
+        - Sets _resume_tick = last_tick + 1
+        - Fires SIM_RESUMED
+        - Does NOT write a tick-0 state row (data already exists)
+
+        NOTE:
+        - `_total_reorders` and `_total_stockout_ticks` are not restored on warm-start
+        - They are used only for the `SIM_ENDED` summary line and are therefore session-relative (counts for this process lifetime only), not run-cumulative
+        - This is intentional: restoring them would require additional table queries for marginal display benefit
+        '''
+
+        last_tick = self._detect_resume_tick()
+        is_warm   = last_tick is not None
+
+        config_snapshot = {
+            "sim_id":    self._sim_id,
+            "run_mode":  self._config.run_mode.value,
+            "num_ticks": self._config.num_ticks,
+            "tick_unit": self._config.tick_unit.value,
+            "seed":      self._config.random_seed,
         }
 
-        self._log(
-            f"SIM_STARTED  sim_id={self._sim_id!r}  "
-            f"ticks={self._config.num_ticks}  "
-            f"seed={self._config.random_seed}  "
-            f"agent={self._agent.agent_version()}"
-        )
+        if is_warm:
+            # ── Warm-start path ──────────────────────────────────────────────
+            self._resume_tick  = last_tick + 1
+            self._stock_states = fetch_current_states(self._spark, self._sim_id)
+            self._cost_states  = fetch_current_cost_states(self._spark, self._sim_id)
 
-        self._logger.sim_started(
-            tick             = 0,
-            config_snapshot  = {
-                "sim_id":    self._sim_id,
-                "run_mode":  self._config.run_mode.value,
-                "num_ticks": self._config.num_ticks,
-                "tick_unit": self._config.tick_unit.value,
-                "seed":      self._config.random_seed,
-            },
-        )
+            # Restore _total_cost from the recovered cost states so the SIM_ENDED summary and progress display reflect the full run total
+            self._total_cost = sum(
+                cs.cumulative_total for cs in self._cost_states.values()
+            )
 
-        # Write tick-0 warehouse state (initial_stock, no arrivals or demand yet)
-        write_warehouse_state(self._spark, self._sim_id, tick=0,
-                              states=self._stock_states)
+            self._log(
+                f"SIM_RESUMED  sim_id={self._sim_id!r}  "
+                f"resuming_from_tick={self._resume_tick}  "
+                f"seed={self._config.random_seed}  "
+                f"agent={self._agent.agent_version()}"
+            )
+            self._logger.sim_resumed(
+                tick         = self._resume_tick,
+                resumed_from = last_tick,
+                config_snapshot = config_snapshot,
+            )
+
+        else:
+            # ── Fresh-start path (original behaviour, unchanged) ─────────────
+            self._resume_tick  = 0
+            self._stock_states = initialise_states(self._world)
+            self._cost_states  = {
+                item_id: CostState(item_id=item_id)
+                for item_id in self._world.items
+            }
+
+            self._log(
+                f"SIM_STARTED  sim_id={self._sim_id!r}  "
+                f"ticks={self._config.num_ticks}  "
+                f"seed={self._config.random_seed}  "
+                f"agent={self._agent.agent_version()}"
+            )
+            self._logger.sim_started(
+                tick            = 0,
+                config_snapshot = config_snapshot,
+            )
+
+            # Write tick-0 warehouse state (initial_stock, no arrivals or demand yet).
+            # NOTE: Skipped on warm-start: the table already has this sim_id's history.
+            write_warehouse_state(self._spark, self._sim_id, tick=0, states=self._stock_states)
 
     #====================================
     # Loop termination

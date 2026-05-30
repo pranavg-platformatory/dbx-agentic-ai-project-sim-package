@@ -15,6 +15,15 @@ SimRunner unchanged. Only `run` and `_run_tick` are overridden.
 
 ---
 
+WARM-START:
+
+- `_initialise()` (inherited from SimRunner):
+    - Auto-detects prior state
+    - Sets `self._resume_tick` before `run()` starts the tick loop
+- ContinuousRunner.run() starts from `self._resume_tick` rather than 0, so warm-start requires no additional logic here
+
+---
+
 Usage:
 
 ```python
@@ -91,7 +100,7 @@ class ContinuousRunner(SimRunner):
     SimRunner with wall-clock pacing and live progress output.
 
     NOTE:
-    - Inherits all simulation logic from SimRunner
+    - Inherits all simulation logic from SimRunner, including warm-start detection
     - Only `run` and `_run_tick` are overridden
 
     ---
@@ -134,8 +143,8 @@ class ContinuousRunner(SimRunner):
         Run the simulation with live progress output and graceful interruption.
 
         NOTE:
-        - Overrides SimRunner.run() to wrap the tick loop in a try/except/finally block
-        - On KeyboardInterrupt (notebook Interrupt kernel), _teardown is called before exiting so SIM_ENDED is always written and the event log is always complete
+        - Calls _initialise() (inherited from SimRunner), which auto-detects warm-start and sets self._resume_tick before the loop begins
+        - On KeyboardInterrupt (notebook Interrupt kernel), _teardown is called before exiting so `SIM_ENDED` is always written and the event log is always complete
 
         ---
 
@@ -159,9 +168,12 @@ class ContinuousRunner(SimRunner):
         print(f"  pace      : {f'{pace}s / tick' if pace else 'as fast as possible'}")
         print(f"{'─'*60}\n")
 
+        # _initialise() sets self._resume_tick:
+        #   - 0           for a fresh run (no prior data for this sim_id)
+        #   - last_tick+1 for a warm-start (prior data detected)
         self._initialise()
 
-        tick        = 0
+        tick        = self._resume_tick
         interrupted = False
 
         try:

@@ -368,7 +368,16 @@ class LLMAgentWrapper(BaseAgent):
         #------------------------
         message = self._build_queue_message(context)
         self._queue.append(message)
-        self._write_eval_metrics(context)
+        
+        try:
+            self._write_eval_metrics(context)
+        except Exception as exc:
+            self._logger.agent_error(
+                tick     = context.tick,
+                exc_type = type(exc).__name__,
+                exc_msg  = "(LLMAgentWrapper._write_eval_metrics) " + str(exc),
+            )
+
 
         #------------------------
         # [2] Executor loop
@@ -544,39 +553,33 @@ class LLMAgentWrapper(BaseAgent):
         #
         # Two paths, selected by stub_mode in LLMAgentWrapperConfig:
         #
-        # stub_mode is not None → _StubLLMAgent.respond() stands in for the LLM call.
-        #   Returns list[ReorderDecision] directly (valid/logical_fail modes) or a raw
-        #   string (structural_fail mode). Pre-flight validation below runs in both cases.
+        # 1. stub_mode is not None
+        #   - → _StubLLMAgent.respond() stands in for the LLM call
+        #   - Returns list[ReorderDecision] directly (valid/logical_fail modes) or a raw string (structural_fail mode). Pre-flight validation below runs in both cases
         #
-        # stub_mode is None → self._llm_agent.decide(context) calls LLMReorderAgent.
-        #   LLMReorderAgent runs the full LangGraph loop (LLM call + tool calls) and
-        #   returns list[ReorderDecision]. Its internal _parse_llm_decisions already
-        #   clamps out-of-range quantities and fills missing items with HOLD, so the
-        #   list it returns is always structurally valid. _validate_structural will
-        #   accept it as-is; _validate_logical is still run as a safety net.
+        # 2. stub_mode is None
+        #   - → self._llm_agent.decide(context) calls LLMReorderAgent
+        #   - LLMReorderAgent runs the full LangGraph loop (LLM call + tool calls) and returns list[ReorderDecision]
+        #   - Its internal _parse_llm_decisions already clamps out-of-range quantities and fills missing items with HOLD, so the list it returns is always structurally valid
+        #   - _validate_structural will accept it as-is; _validate_logical is still run as a safety net
         #
-        # NOTE: _run_executor is the ONLY place the LLM call happens. LLMAgentWrapper
-        # remains the agent the runner knows about. LLMReorderAgent is an internal detail.
+        # NOTE: _run_executor is the ONLY place the LLM call happens. LLMAgentWrapper remains the agent the runner knows about. LLMReorderAgent is an internal detail.
         try:
             if self._config.stub_mode is not None:
                 stub = _StubLLMAgent(self._config.stub_mode)
                 raw_response = stub.respond(context)
             else:
-                # Real LLM call via LLMReorderAgent (Her Majesty Reshma the Boss's package).
-                # decide() returns list[ReorderDecision] directly - the same type _validate_structural
-                # already accepts from the stub's valid/logical_fail modes.
+                # - This is where the real LLM call happens via LLMReorderAgent (Her Majesty Reshma the Boss's package)
+                # - decide() returns list[ReorderDecision] directly - the same type _validate_structural already accepts from the stub's valid/logical_fail modes
                 raw_response = self._llm_agent.decide(context)
 
         except Exception as e:
-            # Any exception from the LLM call (network failure, LangGraph error, etc.)
-            # is caught here so the executor thread can still write a fallback result to
-            # _result_slot and clear _executor_busy. Without this, an unhandled exception
-            # would leave _executor_busy=True permanently, silently stopping all future
-            # executor dispatches for the rest of the simulation run.
+            # - Any exception from the LLM call (network failure, LangGraph error, etc.) is caught here so the executor thread can still write a fallback result to _result_slot and clear _executor_busy
+            # - Without this, an unhandled exception would leave _executor_busy=True permanently, silently stopping all future executor dispatches for the rest of the simulation run
             #
-            # This also addresses the known gap documented in the devlog:
-            # "No finally block in _run_executor - if NotImplementedError is raised
-            # (stub_mode=None), _executor_busy is never cleared."
+            # NOTE:
+            # - This also addresses the known gap documented in the devlog:
+            #   "No finally block in _run_executor - if NotImplementedError is raised (stub_mode=None), _executor_busy is never cleared."
             self._logger.fallback_structural(
                 tick         = current_tick,
                 raw_response = "",

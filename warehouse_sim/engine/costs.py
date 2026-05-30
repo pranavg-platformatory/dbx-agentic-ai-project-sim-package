@@ -268,6 +268,58 @@ def deduct_budget(
 
 
 #################################################
+# Spark reads
+#################################################
+
+def fetch_current_cost_states(
+    spark:  "SparkSession",
+    sim_id: str,
+) -> dict[str, CostState]:
+    '''
+    Read the latest cumulative cost totals for all items (MAX(tick) per item)
+    from the table "ops_cost_accumulator".
+
+    NOTE:
+    - Used by the runner to reconstruct in-memory CostState after a restart
+    - Mirrors `fetch_current_states` in `warehouse_sim/engine/state.py`: same MAX(tick)-per-item join pattern
+    - Not called during a normal continuous run (cost state is kept in memory)
+    - `remaining_budget` is not restored here; it is handled separately in `_initialise()` because it is a run-level scalar, not a per-item value
+
+    ---
+
+    PARAMETERS:
+    - `spark` (SparkSession): SparkSession instance handling Spark operations
+    - `sim_id` (str): Simulation ID
+
+    RETURNS:
+    - (dict[str, CostState]): Dictionary linking item IDs to CostState instances populated with the cumulative totals from the last completed tick
+    '''
+
+    rows = spark.sql(f'''
+        SELECT ca.*
+        FROM {_ACCUM_TABLE} ca
+        INNER JOIN (
+            SELECT item_id, MAX(tick) AS max_tick
+            FROM {_ACCUM_TABLE}
+            WHERE sim_id = '{sim_id}'
+            GROUP BY item_id
+        ) latest ON ca.item_id = latest.item_id AND ca.tick = latest.max_tick
+        WHERE ca.sim_id = '{sim_id}'
+    ''').collect()
+
+    return {
+        row["item_id"]: CostState(
+            item_id                      = row["item_id"],
+            cumulative_holding_cost      = row["cumulative_holding_cost"],
+            cumulative_stockout_cost     = row["cumulative_stockout_cost"],
+            cumulative_order_cost        = row["cumulative_order_cost"],
+            cumulative_transit_loss_cost = row["cumulative_transit_loss_cost"],
+        )
+        for row in rows
+    }
+
+
+#################################################
 # Spark writes (lazy imports)
 #################################################
 

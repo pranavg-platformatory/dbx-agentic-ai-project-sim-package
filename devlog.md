@@ -485,6 +485,8 @@ Key points:
 
 **Dependency flag**: `EventLogger.agent_error()` does not yet exist - must be added before this change can be tested end-to-end. Follows the same pattern as every other typed event method on the logger.
 
+**NOTE (from the future)**: *`EventLogger.agent_error()` has been added.*
+
 ---
 
 ### Stage 4 - `hist_eval_metrics` DDL
@@ -554,8 +556,8 @@ Key points:
 
 **Known gaps (from post-implementation evaluation)**:
 - `_executor_busy` read in trigger check is outside the lock - inconsistent with stated rationale; acceptable for CPython but should be addressed
-- No `finally` block in `_run_executor` - if `NotImplementedError` is raised (stub_mode=None), `_executor_busy` is never cleared; simulation silently stops dispatching. Needs a `finally` block
-- `_write_eval_metrics` has no error handling - a failed metric write should not halt the tick; needs a `try/except` with event log fallback
+- No `finally` block in `_run_executor` - if `NotImplementedError` is raised (stub_mode=None), `_executor_busy` is never cleared; simulation silently stops dispatching. Needs a `finally` block <br> **NOTE (from the future)**: *This gap has been addressed, as mentioned in the code comments for `LLMAgentWrapper._run_executor` (see: [`warehouse_sim/agent/llm_agent_wrapper.py`](./warehouse_sim/agent/llm_agent_wrapper.py))*
+- `_write_eval_metrics` has no error handling - a failed metric write should not halt the tick; needs a `try/except` with event log fallback <br> **NOTE (from the future)**: *This gap has been addressed, in the `# [1] Monitoring loop` section in the `LLMAgentWrapper.decide` method (see: [`warehouse_sim/agent/llm_agent_wrapper.py`](./warehouse_sim/agent/llm_agent_wrapper.py))*
 - `EXECUTOR_ALL_STALE`, `FALLBACK_STRUCTURAL`, `FALLBACK_LOGICAL` event types added to `event_log` DDL ✓ (updated post-evaluation)
 
 ---

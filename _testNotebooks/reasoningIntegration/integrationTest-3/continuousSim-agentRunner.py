@@ -10,7 +10,7 @@
 # MAGIC
 # MAGIC ---
 # MAGIC
-# MAGIC **Depends on**: Stages 1-7 complete (env tables exist, `ContinuousRunner` available). World is built fresh in Section 4 below.
+# MAGIC **Depends on**: Stages 1-7 complete (env tables exist, `ContinuousRunner` available). World is built in Section 4 below on fresh runs only.
 
 # COMMAND ----------
 
@@ -42,7 +42,7 @@
 # MAGIC | `LLM_AGENT_PACKAGE_PATH` | LLM only: path inserted into `sys.path`. Ignored for rule-based. |
 # MAGIC | `LLM_AGENT_CONFIG_OVERRIDE` | LLM only: forwarded to `LLMAgentWrapperConfig.llm_agent_config_override`. |
 # MAGIC
-# MAGIC **Note on `TICK_DURATION_SECONDS`**: the dashboard notebook polls at a configurable interval. For a live feed, set `TICK_DURATION_SECONDS` to at least 2–3 seconds so the dashboard sees meaningful new data on each poll. `None` (full speed) will produce large bursts of ticks per dashboard poll rather than a continuous stream.
+# MAGIC **Note on `TICK_DURATION_SECONDS`**: the dashboard notebook polls at a configurable interval. For a live feed, set `TICK_DURATION_SECONDS` to at least 2-3 seconds so the dashboard sees meaningful new data on each poll. `None` (full speed) will produce large bursts of ticks per dashboard poll rather than a continuous stream.
 
 # COMMAND ----------
 
@@ -117,189 +117,175 @@ print("Imports resolved.")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 3. Clean up prior data for this `SIM_ID`
+# MAGIC ## 3. Prior state detection
 # MAGIC
-# MAGIC Deletes all rows written by a previous run of this `SIM_ID`. Idempotent: safe to re-run if this is a fresh `SIM_ID` with no prior data.
+# MAGIC Checks whether data already exists for this `SIM_ID` in `ops_warehouse_state`. The result drives Section 4: `write_world` is called only on a fresh run.
 # MAGIC
-# MAGIC Append-only tables are temporarily unlocked for the delete and re-locked immediately after - same pattern used in the integration test notebook.
+# MAGIC **No data wipe is performed here or anywhere in this notebook.** State management (recovery, resume tick, cost continuity) is handled entirely by `ContinuousRunner` via its warm-start logic in `_initialise()`. Wiping data on restart would destroy accumulated history and defeat the purpose of warm-start. If a clean slate is ever needed, that is a deliberate out-of-band operation, not something the notebook does automatically.
 
 # COMMAND ----------
 
-_APPEND_ONLY_TABLES = [
-    f"{CATALOG}.tables4ops.ops_warehouse_state",
-    f"{CATALOG}.tables4ops.ops_active_disruptions",
-    f"{CATALOG}.tables4ops.ops_cost_accumulator",
-    f"{CATALOG}.tables4hist.hist_demand_actuals",
-    f"{CATALOG}.tables4hist.hist_supply_arrivals",
-    f"{CATALOG}.tables4hist.hist_reorder_decisions",
-    f"{CATALOG}.tables4hist.hist_cost_by_tick",
-    f"{CATALOG}.tables4hist.hist_eval_metrics",
-    f"{CATALOG}.tables4eventlog.event_log",
-]
-_MUTABLE_TABLES = [
-    f"{CATALOG}.tables4ops.ops_pending_orders",
-    f"{CATALOG}.tables4ops.ops_escalation_queue",
-]
-_ENV_TABLES_WITH_SIM_ID = [
-    f"{CATALOG}.tables4env.env_sim_config",
-    f"{CATALOG}.tables4env.env_supplier_item_map",
-    f"{CATALOG}.tables4env.env_consumer_item_map",
-    f"{CATALOG}.tables4env.env_patterns",
-    f"{CATALOG}.tables4env.env_disruption_schedule",
-]
+_max_tick_row = spark.sql(f'''
+    SELECT MAX(tick) AS max_tick
+    FROM {CATALOG}.tables4ops.ops_warehouse_state
+    WHERE sim_id = '{SIM_ID}'
+''').collect()[0]
 
-print(f"Clearing prior data for sim_id='{SIM_ID}'...")
+_has_prior_state = _max_tick_row["max_tick"] is not None
 
-for table in _APPEND_ONLY_TABLES:
-    spark.sql(f"ALTER TABLE {table} SET TBLPROPERTIES ('delta.appendOnly' = 'false')")
-    spark.sql(f"DELETE FROM {table} WHERE sim_id = '{SIM_ID}'")
-    spark.sql(f"ALTER TABLE {table} SET TBLPROPERTIES ('delta.appendOnly' = 'true')")
-
-for table in _MUTABLE_TABLES:
-    try:
-        spark.sql(f"DELETE FROM {table} WHERE sim_id = '{SIM_ID}'")
-    except Exception:
-        pass  # table may not exist yet if escalation queue was never written
-
-for table in _ENV_TABLES_WITH_SIM_ID:
-    spark.sql(f"DELETE FROM {table} WHERE sim_id = '{SIM_ID}'")
-
-print("[DONE] Prior data cleared.")
+if _has_prior_state:
+    print(f"Prior state detected for sim_id='{SIM_ID}' (max_tick={_max_tick_row['max_tick']}).")
+    print(f"  write_world will be skipped. Runner will resume from tick {_max_tick_row['max_tick'] + 1}.")
+else:
+    print(f"No prior state found for sim_id='{SIM_ID}'. Fresh run.")
+    print(f"  write_world will run to populate env tables.")
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC ## 4. Build and write `SimWorld`
 # MAGIC
+# MAGIC **Skipped on warm-start** (`_has_prior_state = True`). The env tables already
+# MAGIC hold the world definition from the original run. `load_world` in Section 5 reads
+# MAGIC from those tables directly.
+# MAGIC
+# MAGIC **Runs on fresh start** (`_has_prior_state = False`). Writes the full world definition to the `tables4env` schema before `load_world` can succeed.
+# MAGIC
+# MAGIC ---
+# MAGIC
 # MAGIC **World spec**:
 # MAGIC - 2 items (Widget A, Gadget B), 2 suppliers, 1 consumer
 # MAGIC - Widget A: 5-tick cyclic custom demand with noise; stochastic demand spike from tick 10 onward (40% chance per tick) - tests agent response to unpredictable surge
-# MAGIC - Gadget B: Poisson demand (mu=8); stochastic transit delay from tick 20 onward (25% chance per tick) - tests agent response to supply disruption
+# MAGIC - Gadget B: Poisson demand (mu=8); stochastic transit delay from tick 20
+# MAGIC   onward (25% chance per tick) - tests agent response to supply disruption
 # MAGIC - Probabilistic lead times (non-zero variability) to create realistic supply uncertainty
 # MAGIC - No budget limit: continuous runs are not time-bounded so a hard budget cap would stop the simulation unpredictably
 
 # COMMAND ----------
 
-NOW = datetime.now(timezone.utc)
+if _has_prior_state:
+    print(f"Warm-start: skipping write_world for sim_id='{SIM_ID}'.")
 
-world_def = SimWorld(
-    config = SimConfig(
-        sim_id                     = SIM_ID,
-        random_seed                = SIM_SEED,
-        num_ticks                  = None,             # None = run forever
-        run_mode                   = RunMode(RUN_MODE),
-        tick_unit                  = TickUnit(TICK_UNIT),
-        budget_limit               = None,             # unlimited; hard cap not meaningful for open-ended runs
-        budget_warning_threshold   = 0.10,
-        agent_history_window_ticks = 10,
-        start_timestamp            = NOW,
-        created_at                 = NOW,
-    ),
-    items = {
-        "item_A": ItemType(
-            item_id                         = "item_A",
-            item_name                       = "Widget A",
-            unit_value                      = 5.0,
-            initial_stock                   = 80,
-            reorder_point                   = 25,
-            min_order_qty                   = 20,
-            max_order_qty                   = 150,
-            holding_cost_per_unit_per_tick  = 0.05,
-            stockout_cost_per_unit_per_tick = 2.0,
-            order_fixed_cost                = 50.0,
-            order_variable_cost_per_unit    = 4.5,
-            transit_loss_cost_per_unit      = 6.0,
-        ),
-        "item_B": ItemType(
-            item_id                         = "item_B",
-            item_name                       = "Gadget B",
-            unit_value                      = 12.0,
-            initial_stock                   = 40,
-            reorder_point                   = 15,
-            min_order_qty                   = 10,
-            max_order_qty                   = 80,
-            holding_cost_per_unit_per_tick  = 0.10,
-            stockout_cost_per_unit_per_tick = 5.0,
-            order_fixed_cost                = 30.0,
-            order_variable_cost_per_unit    = 10.0,
-            transit_loss_cost_per_unit      = 15.0,
-        ),
-    },
-    suppliers = {
-        "sup_001": Supplier(
-            supplier_id           = "sup_001",
-            supplier_name         = "Acme Corp",
-            base_lead_time_ticks  = 3,
-            lead_time_variability = 0.5,   # non-zero: realistic supply uncertainty
-        ),
-        "sup_002": Supplier(
-            supplier_id           = "sup_002",
-            supplier_name         = "Globex Ltd",
-            base_lead_time_ticks  = 4,
-            lead_time_variability = 1.0,
-        ),
-    },
-    consumers = {
-        "con_001": Consumer(consumer_id="con_001", consumer_name="Retail Division"),
-    },
-    supplier_item_map = {"item_A": "sup_001", "item_B": "sup_002"},
-    consumer_item_map = {"item_A": "con_001", "item_B": "con_001"},
-    demand_patterns = {
-        "item_A": Pattern(
-            pattern_id      = f"{SIM_ID}__item_A__demand",
-            sim_id          = SIM_ID,
-            item_id         = "item_A",
-            role            = PatternRole.DEMAND,
-            pattern_type    = PatternType.CUSTOM,
-            # 5-tick cycle repeating indefinitely - gives a recognisable
-            # wave structure in the dashboard plots
-            custom_schedule = [10.0, 15.0, 20.0, 12.0, 8.0],
-            noise_std       = 2.0,
-        ),
-        "item_B": Pattern(
-            pattern_id   = f"{SIM_ID}__item_B__demand",
-            sim_id       = SIM_ID,
-            item_id      = "item_B",
-            role         = PatternRole.DEMAND,
-            pattern_type = PatternType.STATISTICAL,
-            distribution = Distribution.POISSON,
-            dist_params  = {"mu": 8},
-            noise_std    = 0.0,
-        ),
-    },
-    supply_patterns = {},
-    disruptions = [
-        # Stochastic demand spike on item_A from tick 10 onward.
-        # 40% activation probability per tick - tests whether the agent learns to anticipate surge rather than react to it.
-        DisruptionSchedule(
-            disruption_id       = f"{SIM_ID}__dis_spike_A",
-            sim_id              = SIM_ID,
-            item_id             = "item_A",
-            disruption_type     = DisruptionType.DEMAND_SPIKE,
-            start_tick          = 10,
-            end_tick            = 999_999,
-            magnitude           = 2.5,
-            is_stochastic       = True,
-            trigger_probability = 0.40,
-        ),
-        # Stochastic transit delay on item_B from tick 20 onward.
-        # 25% activation probability per tick - creates supply uncertainty that a rule-based agent (which ignores lead time disruptions at decision time) will handle worse than the LLM agent.
-        DisruptionSchedule(
-            disruption_id       = f"{SIM_ID}__dis_delay_B",
-            sim_id              = SIM_ID,
-            item_id             = "item_B",
-            disruption_type     = DisruptionType.TRANSIT_DELAY,
-            start_tick          = 20,
-            end_tick            = 999_999,
-            magnitude           = 1.5,
-            is_stochastic       = True,
-            trigger_probability = 0.25,
-        ),
-    ],
-)
+else:
+    NOW = datetime.now(timezone.utc)
 
-write_world(spark, world_def)
-print(f"[DONE] SimWorld written for sim_id='{SIM_ID}'.")
+    world_def = SimWorld(
+        config = SimConfig(
+            sim_id                     = SIM_ID,
+            random_seed                = SIM_SEED,
+            num_ticks                  = None,             # None = run forever
+            run_mode                   = RunMode(RUN_MODE),
+            tick_unit                  = TickUnit(TICK_UNIT),
+            budget_limit               = None,             # unlimited; hard cap not meaningful for open-ended runs
+            budget_warning_threshold   = 0.10,
+            agent_history_window_ticks = 10,
+            start_timestamp            = NOW,
+            created_at                 = NOW,
+        ),
+        items = {
+            "item_A": ItemType(
+                item_id                         = "item_A",
+                item_name                       = "Widget A",
+                unit_value                      = 5.0,
+                initial_stock                   = 80,
+                reorder_point                   = 25,
+                min_order_qty                   = 20,
+                max_order_qty                   = 150,
+                holding_cost_per_unit_per_tick  = 0.05,
+                stockout_cost_per_unit_per_tick = 2.0,
+                order_fixed_cost                = 50.0,
+                order_variable_cost_per_unit    = 4.5,
+                transit_loss_cost_per_unit      = 6.0,
+            ),
+            "item_B": ItemType(
+                item_id                         = "item_B",
+                item_name                       = "Gadget B",
+                unit_value                      = 12.0,
+                initial_stock                   = 40,
+                reorder_point                   = 15,
+                min_order_qty                   = 10,
+                max_order_qty                   = 80,
+                holding_cost_per_unit_per_tick  = 0.10,
+                stockout_cost_per_unit_per_tick = 5.0,
+                order_fixed_cost                = 30.0,
+                order_variable_cost_per_unit    = 10.0,
+                transit_loss_cost_per_unit      = 15.0,
+            ),
+        },
+        suppliers = {
+            "sup_001": Supplier(
+                supplier_id           = "sup_001",
+                supplier_name         = "Acme Corp",
+                base_lead_time_ticks  = 3,
+                lead_time_variability = 0.5,   # non-zero: realistic supply uncertainty
+            ),
+            "sup_002": Supplier(
+                supplier_id           = "sup_002",
+                supplier_name         = "Globex Ltd",
+                base_lead_time_ticks  = 4,
+                lead_time_variability = 1.0,
+            ),
+        },
+        consumers = {
+            "con_001": Consumer(consumer_id="con_001", consumer_name="Retail Division"),
+        },
+        supplier_item_map = {"item_A": "sup_001", "item_B": "sup_002"},
+        consumer_item_map = {"item_A": "con_001", "item_B": "con_001"},
+        demand_patterns = {
+            "item_A": Pattern(
+                pattern_id      = f"{SIM_ID}__item_A__demand",
+                sim_id          = SIM_ID,
+                item_id         = "item_A",
+                role            = PatternRole.DEMAND,
+                pattern_type    = PatternType.CUSTOM,
+                # 5-tick cycle repeating indefinitely - gives a recognisable wave structure in the dashboard plots
+                custom_schedule = [10.0, 15.0, 20.0, 12.0, 8.0],
+                noise_std       = 2.0,
+            ),
+            "item_B": Pattern(
+                pattern_id   = f"{SIM_ID}__item_B__demand",
+                sim_id       = SIM_ID,
+                item_id      = "item_B",
+                role         = PatternRole.DEMAND,
+                pattern_type = PatternType.STATISTICAL,
+                distribution = Distribution.POISSON,
+                dist_params  = {"mu": 8},
+                noise_std    = 0.0,
+            ),
+        },
+        supply_patterns = {},
+        disruptions = [
+            # Stochastic demand spike on item_A from tick 10 onward.
+            # 40% activation probability per tick - tests whether the agent learns to anticipate surge rather than react to it.
+            DisruptionSchedule(
+                disruption_id       = f"{SIM_ID}__dis_spike_A",
+                sim_id              = SIM_ID,
+                item_id             = "item_A",
+                disruption_type     = DisruptionType.DEMAND_SPIKE,
+                start_tick          = 10,
+                end_tick            = 999_999,
+                magnitude           = 2.5,
+                is_stochastic       = True,
+                trigger_probability = 0.40,
+            ),
+            # Stochastic transit delay on item_B from tick 20 onward.
+            # 25% activation probability per tick - creates supply uncertainty that a rule-based agent (which ignores lead time disruptions at decision time) will handle worse than the LLM agent.
+            DisruptionSchedule(
+                disruption_id       = f"{SIM_ID}__dis_delay_B",
+                sim_id              = SIM_ID,
+                item_id             = "item_B",
+                disruption_type     = DisruptionType.TRANSIT_DELAY,
+                start_tick          = 20,
+                end_tick            = 999_999,
+                magnitude           = 1.5,
+                is_stochastic       = True,
+                trigger_probability = 0.25,
+            ),
+        ],
+    )
+
+    write_world(spark, world_def)
+    print(f"[DONE] SimWorld written for sim_id='{SIM_ID}'.")
 
 # COMMAND ----------
 
@@ -375,7 +361,11 @@ else:
 # MAGIC `ContinuousRunner` inherits all simulation logic from `SimRunner` and adds:
 # MAGIC - Wall-clock pacing (`TICK_DURATION_SECONDS` sleep between ticks)
 # MAGIC - Live console progress line every `PRINT_EVERY_N_TICKS` ticks
-# MAGIC - Graceful `KeyboardInterrupt` handling: `SIM_ENDED` is always written before the cell exits, so the event log is complete regardless of when you stop the simulation
+# MAGIC - Graceful `KeyboardInterrupt` handling: `SIM_ENDED` is always written
+# MAGIC   before the cell exits, so the event log is complete regardless of when
+# MAGIC   you stop the simulation
+# MAGIC
+# MAGIC On warm-start, the runner resumes automatically from the last completed tick. No action is required here — `runner.run()` calls `_initialise()` internally, which detects prior state and branches accordingly.
 # MAGIC
 # MAGIC Open [`continuousSim-liveDashboard.py`](./continuousSim-liveDashboard.py) in a separate tab with the same `SIM_ID` to watch the simulation live while this cell is running.
 

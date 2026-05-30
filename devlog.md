@@ -77,6 +77,15 @@
   - [Completion Status](#completion-status-2)
   - [Summary](#summary)
 - [Running Simulation as a Job - Part 2: Notebook-Focused](#running-simulation-as-a-job---part-2-notebook-focused)
+  - [Context](#context-2)
+  - [Design Notes](#design-notes)
+    - [*What does not change*](#what-does-not-change)
+    - [Section 3 - *Remove entirely*](#section-3---remove-entirely)
+    - [Section 4 - *`write_world` becomes conditional*](#section-4---write_world-becomes-conditional)
+    - [*The detection query*](#the-detection-query)
+    - [*Responsibility boundary*](#responsibility-boundary)
+  - [Section Map](#section-map)
+  - [Completion Status](#completion-status-3)
  
 ---
 
@@ -770,7 +779,7 @@ This does not require a DDL change - `item_id STRING` in `setup4dataStore.py` ac
 
 A single notebook split into two independent sections. Section 1 runs both agents sequentially against an identical world configuration. Section 2 reads only from Delta tables - no simulation code - and can be re-run independently without re-running Section 1. This matters because a 20-tick LLM run has non-trivial wall time.
 
-**World**: 2 items, 2 suppliers, 1 consumer, 20 ticks, deterministic lead times (`variability=0.0`), same seed for both runs. Three disruptions chosen to stress both agents: a demand spike on item_A (ticks 6–9), a demand suppression on item_B (ticks 12–15), and a transit delay on item_A (ticks 14–17) overlapping the suppression. The world is written twice - once per `sim_id` - because env tables like `env_patterns` and `env_disruption_schedule` are scoped by `sim_id`.
+**World**: 2 items, 2 suppliers, 1 consumer, 20 ticks, deterministic lead times (`variability=0.0`), same seed for both runs. Three disruptions chosen to stress both agents: a demand spike on item_A (ticks 6-9), a demand suppression on item_B (ticks 12-15), and a transit delay on item_A (ticks 14-17) overlapping the suppression. The world is written twice - once per `sim_id` - because env tables like `env_patterns` and `env_disruption_schedule` are scoped by `sim_id`.
 
 **Agent 1** (`SIM_ID_RULEBASED`): `RuleBasedAgent`, instantiated directly.
 
@@ -780,7 +789,7 @@ A single notebook split into two independent sections. Section 1 runs both agent
 - All data loaded once in cell 2.0; plot and table cells reference DataFrames without re-querying
 - 6 plots: disruptions (sanity check - should be identical for both sim_ids), demand, actual average lead time (computed from `ops_pending_orders`, not configured baseline), stacked cost per item, fulfilment vs. unmet demand, reorder decisions (Plots 5 and 6 share an x-axis as a two-panel figure per agent)
 - 6 summary tables: disruption summary, reorder decisions (with `agent_reasoning` for LLM run), demand fulfilment, stockout summary, agent health (LLM only - `FALLBACK_*` and `AGENT_ERROR` event counts), escalation summary (LLM only)
-- 9 evaluation queries (Q1–Q9) including a gap check (Q2, expect zero rows) and the headline cost comparison (Q7)
+- 9 evaluation queries (Q1-Q9) including a gap check (Q2, expect zero rows) and the headline cost comparison (Q7)
 
 **Key interpretation notes** carried forward from the test plan:
 - Table 5 (agent health) must be checked before interpreting Plot 4 and Q7. Fallback events mean those ticks used `RuleBasedAgent` decisions - the cost comparison is not fully clean for those ticks.
@@ -804,7 +813,7 @@ Two notebooks meant to run simultaneously in separate browser tabs. They are dec
 
 The dashboard can be started before, during, or after the runner. If no data exists yet for the `SIM_ID`, it prints a waiting message and retries each poll interval.
 
-**Note on `TICK_DURATION_SECONDS`**: for a meaningful live feed, the runner should be paced at 2–5 seconds per tick. At full speed the dashboard sees large bursts of ticks per poll rather than a stream, which makes the plots less informative in real time.
+**Note on `TICK_DURATION_SECONDS`**: for a meaningful live feed, the runner should be paced at 2-5 seconds per tick. At full speed the dashboard sees large bursts of ticks per poll rather than a stream, which makes the plots less informative in real time.
 
 # Running Simulation as a Job - Part 1: Package-Focused
 
@@ -955,3 +964,101 @@ Section 3 (data wipe) should be removed. With warm-start built into the runner, 
 | Section 3 (data wipe) | `continuousSim-agentRunner.py` | To be removed - permanently incorrect for a fixed `SIM_ID` with warm-start |
 
 # Running Simulation as a Job - Part 2: Notebook-Focused
+***Notebook Design: Agent Runner Warm-Start Adaptation***
+
+**Initial reference file**: [`_testNotebooks/integrationTest-2/continuousSim-agentRunner.py`](./_testNotebooks/integrationTest-2/continuousSim-agentRunner.py)
+
+## Context
+
+The agent runner notebook was written for interactive use: a human starts it, watches the progress output, and interrupts it when done. Section 3 wiped all prior data for the `SIM_ID` on every execution, which was correct for that workflow: each run was intended to be a clean experiment. Section 4 wrote the world definition unconditionally on every boot.
+
+With the runner package updated to support warm-start (see ["Running Simulation as a Job - Part 1: Package-Focused" in this document](#running-simulation-as-a-job---part-1-package-focused)), the notebook needs to be brought into alignment. The package now auto-detects prior state and resumes correctly, but if the notebook wipes that state before the runner ever starts, the detection is pointless. The notebook is the runner's adversary rather than its host.
+
+The changes here are minimal by design:
+
+- The runner owns state management
+- The notebook's only responsibility is to not work against it
+
+## Design Notes
+
+### *What does not change*
+
+The majority of the notebook is correct as-is and requires no modification. The logic in Sections 0-2 (dependencies, parameters, imports) is boot-time setup that is always valid regardless of run history. Sections 5-7 (load world, agent selection, run) are already written correctly: `load_world` reads from env tables that exist on both fresh and warm-start paths; agent construction is agnostic to run history; `runner.run()` now branches internally without any signal from the notebook. These sections are unchanged.
+
+### Section 3 - *Remove entirely*
+
+Section 3 is the data wipe. It unlocks every append-only table, deletes all rows for the `SIM_ID`, and re-locks them. This is the correct behaviour for a throwaway experiment, but it is permanently wrong for a fixed `SIM_ID` running as a job; hence, there is no conditional form of this section worth keeping. A wipe that fires on some condition (e.g. a `FORCE_RESET` flag) introduces a footgun - a misconfigured job restart could silently destroy accumulated data. The safer position is that wiping must be a deliberate, out-of-band operation, not something the notebook does automatically on boot. If a clean slate is ever needed, it is a manual action taken with full awareness of the consequence.
+
+*Section 3 is removed and replaced with a short comment explaining the decision.*
+
+### Section 4 - *`write_world` becomes conditional*
+
+*This is the only substantive code change in the notebook.*
+
+Currently `write_world` runs unconditionally. On a fresh run this is necessary: the env tables (`tables4env.*`) must be populated before `load_world` can succeed. On a warm-start it is redundant, since the world definition has not changed, and the env tables already exist. More importantly, running `write_world` unconditionally on every boot means the notebook is always performing writes it may not need to, and does so without any awareness of run history.
+
+The right approach mirrors what the runner does internally: **detect first, then act.** A `has_prior_state` check queries `MAX(tick)` from `ops_warehouse_state` for this `SIM_ID`. If the result is `None`, no prior data exists and this is a fresh run. If a tick value is returned, prior data exists and `write_world` is skipped.
+
+```
+has_prior_state = True   →   skip write_world; load_world reads existing env tables
+has_prior_state = False  →   run write_world; populate env tables; runner starts at tick 0
+```
+
+The runner's `_initialise()` then runs the same detection independently and branches on the result - it does not rely on the notebook's check. The two checks serve different purposes: the notebook's check gates `write_world`; the runner's check gates state recovery. They use the same underlying query but are not coupled.
+
+**Why not reuse `_detect_resume_tick`?**
+
+`_detect_resume_tick` is a private method on `SimRunner`. Calling it from the notebook before the runner is even instantiated would misuse the class API and create a temporal dependency on object construction order. The notebook's query is a one-liner in Spark SQL, and hence, no abstraction is warranted. Shared intent, separate implementations.
+
+**Why is skipping `write_world` the right call even though it is idempotent?**
+
+`write_world` writes to env tables that do not change between restarts. In practice, running it again on a warm-start would produce the same rows and cause no data corruption. However: making the skip explicit in the notebook makes the intent legible. A reader can see immediately that the notebook distinguishes between fresh and warm starts, and understands that world definition is a one-time bootstrap step. Unconditional writes on every boot obscures this and adds noise to a job that may restart many times over its lifetime.
+
+### *The detection query*
+
+The `has_prior_state` check is a single Spark SQL query:
+
+```python
+_max_tick = spark.sql(f'''
+    SELECT MAX(tick) AS max_tick
+    FROM {CATALOG}.tables4ops.ops_warehouse_state
+    WHERE sim_id = '{SIM_ID}'
+''').collect()[0]["max_tick"]
+
+has_prior_state = _max_tick is not None
+```
+
+This is placed at the top of Section 4, before any branching. The result drives the `write_world` conditional and also provides a clear print statement so the operator can see at a glance whether the job is booting fresh or resuming.
+
+### *Responsibility boundary*
+
+Worth being explicit about what stays out of the notebook entirely:
+
+- **State recovery** (`_stock_states`, `_cost_states`) - runner's concern
+- **Resume tick** (`_resume_tick`) - runner's concern
+- **`SIM_RESUMED` event** - fired by the runner, invisible to the notebook
+- **Cost accumulation continuity** - restored by the runner, invisible to the notebook
+
+The notebook's only active role in warm-start is the single conditional that skips `write_world`. Every other warm-start concern is delegated to the runner. This is the correct division: ***the notebook is a thin configuration and orchestration layer; the runner owns simulation state.***
+
+## Section Map
+
+```
+Section 0  Install dependencies          unchanged
+Section 1  Parameters                   unchanged
+Section 2  Imports and path setup       unchanged
+Section 3  ~~Clean up prior data~~      REMOVED - replaced with explanatory comment
+Section 4  Build and write SimWorld     MODIFIED - write_world conditional on has_prior_state
+Section 5  Load world, logger, sampler  unchanged
+Section 6  Agent selection              unchanged
+Section 7  Run                          unchanged
+```
+
+---
+
+## Completion Status
+
+```
+  Section 3 removal                          ← pending implementation
+  Section 4 write_world conditional          ← pending implementation
+```

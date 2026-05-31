@@ -5,7 +5,7 @@
 > **Relevant repositories**:
 > 
 > - **Ideation & Planning**: [`pranavg-platformatory`/`dbx-agentic-ai-project`, **github.com**](https://github.com/pranavg-platformatory/dbx-agentic-ai-project)
-> - **Databricks App Streamlit Code**: [`pranavg-platformatory`/`dbx-agentic-ai-project-app2monitor-warehouse-sim`](https://github.com/pranavg-platformatory/dbx-agentic-ai-project-app2monitor-warehouse-sim)
+> - **Databricks App Streamlit Code**: [`pranavg-platformatory`/`dbx-agentic-ai-project-app2monitor-warehouse-sim`, **github.com**](https://github.com/pranavg-platformatory/dbx-agentic-ai-project-app2monitor-warehouse-sim)
 
 ---
 

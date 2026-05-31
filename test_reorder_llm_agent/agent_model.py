@@ -29,11 +29,9 @@ class ReorderAgentModel(mlflow.pyfunc.PythonModel):
     '''
     MLflow PyFunc model wrapping LLMReorderAgent.
 
-    predict() accepts a dict payload representing an AgentContext
-    and returns a list of ReorderDecision dicts.
+    predict() accepts a dict payload representing an AgentContext and returns a list of ReorderDecision dicts.
 
-    This is the serving interface - the underlying agent code
-    is unchanged.
+    This is the serving interface - the underlying agent code is unchanged.
     '''
     
     def load_context(self, context):

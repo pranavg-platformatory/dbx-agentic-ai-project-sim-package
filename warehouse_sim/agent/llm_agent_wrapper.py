@@ -586,7 +586,6 @@ class LLMAgentWrapper(BaseAgent):
                 error        = f"LLM call raised exception: {type(e).__name__}: {e}",
             )
             with self._slot_lock:
-                print(f"OH NO! LLM call raised exception: {type(e).__name__}: {e}")
                 self._result_slot = ExecutorResult(
                     decisions        = self._fallback_agent.decide(context),
                     produced_at_tick = chosen.trigger_tick,
@@ -607,7 +606,6 @@ class LLMAgentWrapper(BaseAgent):
         decisions, structural_error = self._validate_structural(raw_response)
 
         if structural_error is not None:
-            print(f"OH NO! FALLBACK_STRUCTURAL = {structural_error}")
             self._logger.fallback_structural(
                 tick         = current_tick,
                 raw_response = str(raw_response),
@@ -630,7 +628,6 @@ class LLMAgentWrapper(BaseAgent):
             logical_violations = self._validate_logical(decisions, context)
 
             if logical_violations:
-                print(f"OH NO! FALLBACK_LOGICAL = {logical_violations}")
                 self._logger.fallback_logical(
                     tick         = current_tick,
                     violations   = logical_violations
@@ -683,9 +680,6 @@ class LLMAgentWrapper(BaseAgent):
         - (str, optional): Error message (only given on failure)
         '''
 
-        print(f"RAW RESPONSE OF TYPE {type(raw_response)} (element type {type(raw_response[0])})= {raw_response}")
-        for r in raw_response:
-            print(f"TYPE = {type(r)}")
         if isinstance(raw_response, list) and all(follows_reorder_agent_class_contract(d) for d in raw_response):
             return raw_response, None
         return None, (

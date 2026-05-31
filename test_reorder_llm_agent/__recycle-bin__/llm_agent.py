@@ -41,7 +41,12 @@ if str(_AGENT_DIR) not in sys.path:
 from base import (
     AgentContext,
     BaseAgent,
-    ReorderDecision
+    ReorderDecision,
+    ItemState,
+    PendingOrder,
+    DemandRecord,
+    ActiveDisruption,
+    CostSnapshot,
 )
 from uc_tools import ALL_TOOLS
 
@@ -188,7 +193,7 @@ def _parse_llm_decisions(
     - Clean JSON arrays
     - JSON wrapped in markdown code fences
     - Partial output with recoverable items
-    - Raise exception for any item missing from the output
+    - Fallback to HOLD for any item missing from the output
 
     PARAMETERS:
     - raw_output : the full string output from the LLM
@@ -198,9 +203,6 @@ def _parse_llm_decisions(
     RETURNS:
     - list[ReorderDecision] - exactly one per item in context.items()
     '''
-
-    # NOTE: Do not handle exceptions! Let errors propagate to the tick engine.
-
     # Strip markdown fences if present
     cleaned = re.sub(r'```(?:json)?', '', raw_output).strip()
 
@@ -211,10 +213,21 @@ def _parse_llm_decisions(
         matches = list(re.finditer(r'\[[\s\S]*?\]', cleaned))
         match = matches[-1] if matches else None
     if not match:
-        err_msg = f'[LLMReorderAgent] WARNING: could not find JSON array in output.\nRaw output: {raw_output[:500]}'
-        raise ValueError(err_msg)
+        print(
+            f'[LLMReorderAgent] WARNING: could not find JSON array in output. '
+            f'Falling back to HOLD for all items.\n'
+            f'Raw output: {raw_output[:500]}'
+        )
+        return _fallback_hold(context, reason='no JSON array in LLM output')
 
-    parsed = json.loads(match.group()) # May raise json.JSONDecodeError if the string is not a valid JSON
+    try:
+        parsed = json.loads(match.group())
+    except json.JSONDecodeError as e:
+        print(
+            f'[LLMReorderAgent] WARNING: JSON parse error: {e}. '
+            f'Falling back to HOLD for all items.'
+        )
+        return _fallback_hold(context, reason=f'JSON parse error: {e}')
 
     # Build a lookup by item_id
     decision_map: dict[str, dict] = {}
@@ -270,6 +283,21 @@ def _parse_llm_decisions(
         ))
 
     return decisions
+
+
+def _fallback_hold(
+    context: AgentContext,
+    reason:  str = 'LLM error',
+) -> list[ReorderDecision]:
+    return [
+        ReorderDecision(
+            item_id   = item_id,
+            order_qty = 0,
+            reasoning = f'[FALLBACK] {reason}',
+        )
+        for item_id in context.items()
+    ]
+
 
 #################################################
 # LangGraph agentic loop
@@ -450,49 +478,52 @@ class LLMReorderAgent(BaseAgent):
             'n_items'      : str(len(context.items())),
         }
 
-        # NOTE: Do not handle exceptions! Let errors propagate to the tick engine.
+        try:
+            with mlflow.start_run(
+                run_name = f'tick_{context.tick}_{context.sim_id}',
+                tags     = run_tags,
+                nested   = True,   # nested=True allows runs inside runs
+            ):
+                # Log the prompt as a parameter for later inspection
+                mlflow.log_param('tick',   context.tick)
+                mlflow.log_param('sim_id', context.sim_id)
+                mlflow.log_param('items',  ','.join(context.items()))
 
-        with mlflow.start_run(
-            run_name = f'tick_{context.tick}_{context.sim_id}',
-            tags     = run_tags,
-            nested   = True,   # nested=True allows runs inside runs
-        ):
-            # Log the prompt as a parameter for later inspection
-            mlflow.log_param('tick',   context.tick)
-            mlflow.log_param('sim_id', context.sim_id)
-            mlflow.log_param('items',  ','.join(context.items()))
+                # Inside _llm_decide(), replace the graph.invoke line with:
+                with mlflow.start_span(name=f'langgraph_tick_{context.tick}') as span:
+                    span.set_inputs({
+                        'sim_id'  : context.sim_id,
+                        'tick'    : context.tick,
+                        'n_items' : len(context.items()),
+                    })
+                    result = self._graph.invoke({'messages': messages})
+                    final_message = result['messages'][-1]
+                    raw_output    = final_message.content
+                    span.set_outputs({'response_chars': len(raw_output)})
 
-            # Inside _llm_decide(), replace the graph.invoke line with:
-            with mlflow.start_span(name=f'langgraph_tick_{context.tick}') as span:
-                span.set_inputs({
-                    'sim_id'  : context.sim_id,
-                    'tick'    : context.tick,
-                    'n_items' : len(context.items()),
-                })
-                result = self._graph.invoke({'messages': messages})
-                final_message = result['messages'][-1]
-                raw_output    = final_message.content
-                span.set_outputs({'response_chars': len(raw_output)})
+                print(
+                    f'[LLMReorderAgent] tick={context.tick} '
+                    f'LLM response ({len(raw_output)} chars) received'
+                )
 
-            print(
-                f'[LLMReorderAgent] tick={context.tick} '
-                f'LLM response ({len(raw_output)} chars) received'
-            )
+                decisions = _parse_llm_decisions(
+                    raw_output, context, self._agent_version
+                )
 
-            decisions = _parse_llm_decisions(
-                raw_output, context, self._agent_version
-            )
+                # Log decision summary as metrics
+                n_reorders = sum(1 for d in decisions if d.is_reorder)
+                n_holds    = sum(1 for d in decisions if d.is_hold)
+                total_qty  = sum(d.order_qty for d in decisions)
 
-            # Log decision summary as metrics
-            n_reorders = sum(1 for d in decisions if d.is_reorder)
-            n_holds    = sum(1 for d in decisions if d.is_hold)
-            total_qty  = sum(d.order_qty for d in decisions)
+                mlflow.log_metric('n_reorders',  n_reorders)
+                mlflow.log_metric('n_holds',     n_holds)
+                mlflow.log_metric('total_order_qty', total_qty)
 
-            mlflow.log_metric('n_reorders',  n_reorders)
-            mlflow.log_metric('n_holds',     n_holds)
-            mlflow.log_metric('total_order_qty', total_qty)
+                return decisions
 
-            return decisions
+        except Exception as e:
+            print(f'[LLMReorderAgent] ERROR in LangGraph invoke: {e}')
+            return _fallback_hold(context, reason=f'LangGraph error: {e}')
     
     #====================================
     # BaseAgent contract

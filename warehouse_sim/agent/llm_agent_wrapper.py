@@ -607,7 +607,7 @@ class LLMAgentWrapper(BaseAgent):
         decisions, structural_error = self._validate_structural(raw_response)
 
         if structural_error is not None:
-            print("OH NO! FALLBACK_STRUCTURAL :(")
+            print(f"OH NO! FALLBACK_STRUCTURAL = {structural_error}")
             self._logger.fallback_structural(
                 tick         = current_tick,
                 raw_response = str(raw_response),

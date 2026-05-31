@@ -30,5 +30,7 @@ class ReorderAgent(BaseAgent):
                     reasoning = "Stock sufficient or orders pending.",
                 ))
         return decisions
+    
     def agent_version(self) -> str:
-        return "reorder_agent_v1"
+        return "reorder_agent_v1"        
+

@@ -240,6 +240,42 @@ class ReorderDecision:
     def is_hold(self) -> bool:
         return self.order_qty == 0
 
+# Contract-checking error that does not rely on exact class matches
+def follows_reorder_agent_class_contract(object:object) -> bool:
+    '''
+    Checks if the given object adheres to ReorderDecision's contract.
+
+    This ensures that identical contracts under different class definitions can still be appropriately validated.
+    
+    NOTE: This is relevant since the reasoning agent that has been separately developed may use an identical contract under its own class definition.
+    
+    ---
+
+    PARAMETERS:
+    - `object` (object): Object to validate
+
+    RETURNS:
+    - (bool): True => Object follows ReorderDecision's contract, False => Object does not follow ReorderDecision's contract
+    '''
+    
+    try:
+        item_id = object.item_id
+        order_qty = object.order_qty
+        reasoning = object.reasoning
+        is_reorder = object.is_reorder
+        is_hold = object.is_hold
+    except AttributeError:
+        return False
+
+    try:
+        if not isinstance(item_id, str): raise TypeError
+        if not isinstance(order_qty, int): raise TypeError
+        if not isinstance(reasoning, str) and not (reasoning is None): raise TypeError
+        if not isinstance(is_reorder(), bool): raise TypeError
+        if not isinstance(is_hold(), bool): raise TypeError
+        # NOTE: If is_reorder or is_hold are not callable, a TypeError is still raised.
+    except TypeError:
+        return False
 
 #################################################
 # BaseAgent

@@ -74,7 +74,7 @@ from pyspark.sql.types import DoubleType, IntegerType, StringType, StructField, 
 
 from ..config.models import SimWorld
 from ..event_log.event_log import EventLogger
-from .base import AgentContext, BaseAgent, ReorderDecision
+from .base import AgentContext, BaseAgent, ReorderDecision, follows_reorder_agent_class_contract
 from ..config import LLMAgentWrapperConfig
 from .llm_agent_wrapper_types import ExecutorResult, QueueMessage
 from .rule_based_agent import RuleBasedAgent
@@ -686,9 +686,7 @@ class LLMAgentWrapper(BaseAgent):
         print(f"RAW RESPONSE OF TYPE {type(raw_response)} (element type {type(raw_response[0])})= {raw_response}")
         for r in raw_response:
             print(f"TYPE = {type(r)}")
-        if isinstance(raw_response, list) and all(
-            isinstance(d, ReorderDecision) for d in raw_response
-        ):
+        if isinstance(raw_response, list) and all(follows_reorder_agent_class_contract(d) for d in raw_response):
             return raw_response, None
         return None, (
             f"Response is not a list[ReorderDecision]: "

@@ -16,7 +16,7 @@ simulation:
   print_every_n_ticks: 1
   seed: 42
 llm_agent:
-  executor_trigger_n: 15
+  executor_trigger_n: 3
   package_path: /Workspace/Shared/reorder-llm-agent
   config_override: {}
 world:

@@ -2,7 +2,10 @@
 
 *Warehouse simulation package for the Databricks agentic AI project.*
 
-> **Ideation & Planning Repository**: [`pranavg-platformatory`/`dbx-agentic-ai-project`, **github.com**](https://github.com/pranavg-platformatory/dbx-agentic-ai-project)
+> **Relevant repositories**:
+> 
+> - **Ideation & Planning**: [`pranavg-platformatory`/`dbx-agentic-ai-project`, **github.com**](https://github.com/pranavg-platformatory/dbx-agentic-ai-project)
+> - **Databricks App Streamlit Code**: [`pranavg-platformatory`/`dbx-agentic-ai-project-app2monitor-warehouse-sim`](https://github.com/pranavg-platformatory/dbx-agentic-ai-project-app2monitor-warehouse-sim)
 
 ---
 

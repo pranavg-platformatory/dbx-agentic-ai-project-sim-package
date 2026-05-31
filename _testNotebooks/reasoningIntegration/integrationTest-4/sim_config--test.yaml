@@ -45,40 +45,40 @@ world:
 
   items:
     item_A:
-      name:                          "Widget A"
-      unit_value:                    5.0
-      initial_stock:                 80
-      reorder_point:                 25
-      min_order_qty:                 20
-      max_order_qty:                 150
+      name:                           "Widget A"
+      unit_value:                      5.0
+      initial_stock:                   80
+      reorder_point:                   25
+      min_order_qty:                   20
+      max_order_qty:                   150
       holding_cost_per_unit_per_tick:  0.05
       stockout_cost_per_unit_per_tick: 2.0
-      order_fixed_cost:              50.0
-      order_variable_cost_per_unit:  4.5
-      transit_loss_cost_per_unit:    6.0
+      order_fixed_cost:                50.0
+      order_variable_cost_per_unit:    4.5
+      transit_loss_cost_per_unit:      6.0
 
     item_B:
-      name:                          "Gadget B"
-      unit_value:                    12.0
-      initial_stock:                 40
-      reorder_point:                 15
-      min_order_qty:                 10
-      max_order_qty:                 80
+      name:                            "Gadget B"
+      unit_value:                      12.0
+      initial_stock:                   40
+      reorder_point:                   15
+      min_order_qty:                   10
+      max_order_qty:                   80
       holding_cost_per_unit_per_tick:  0.10
       stockout_cost_per_unit_per_tick: 5.0
-      order_fixed_cost:              30.0
-      order_variable_cost_per_unit:  10.0
-      transit_loss_cost_per_unit:    15.0
+      order_fixed_cost:                30.0
+      order_variable_cost_per_unit:    10.0
+      transit_loss_cost_per_unit:      15.0
 
   suppliers:
     sup_001:
-      name:                 "Acme Corp"
-      base_lead_time_ticks: 3
+      name:                  "Acme Corp"
+      base_lead_time_ticks:  3
       lead_time_variability: 0.5
 
     sup_002:
-      name:                 "Globex Ltd"
-      base_lead_time_ticks: 4
+      name:                  "Globex Ltd"
+      base_lead_time_ticks:  4
       lead_time_variability: 1.0
 
   consumers:

@@ -34,13 +34,13 @@
 # MAGIC
 # MAGIC **Runner-only keys** (`agent`, `simulation`, `llm_agent`, `world`): read by this notebook only. The dashboard's display parameters (`POLL_INTERVAL_SECONDS`, `MAX_TICKS_TO_SHOW`) remain local to the dashboard notebook — they control polling behaviour only and have no bearing on the simulation.
 # MAGIC
-# MAGIC **Note on `tick_duration_seconds`**: the dashboard polls at a configurable interval. For a live feed, set `tick_duration_seconds` to at least 2–3 seconds so the dashboard sees meaningful new data on each poll. `null` (full speed) will produce large bursts of ticks per dashboard poll rather than a continuous stream.
+# MAGIC **Note on `tick_duration_seconds`**: the dashboard polls at a configurable interval. For a live feed, set `tick_duration_seconds` to at least 2-3 seconds so the dashboard sees meaningful new data on each poll. `null` (full speed) will produce large bursts of ticks per dashboard poll rather than a continuous stream.
  
 # COMMAND ----------
  
 import yaml
  
-_CONFIG_PATH = "/Workspace/Repos/mistermilvusmigrans@gmail.com/dbx-agentic-ai-project-sim-package/_testNotebooks/reasoningIntegration/integrationTest-4/sim_config.yaml"
+_CONFIG_PATH = "/Workspace/Repos/mistermilvusmigrans@gmail.com/dbx-agentic-ai-project-sim-package/_testNotebooks/reasoningIntegration/integrationTest-4/sim_config--test.yaml"
  
 with open(_CONFIG_PATH, "r") as _f:
     _cfg = yaml.safe_load(_f)

@@ -24,6 +24,8 @@ class RuleBasedAgent(BaseAgent):
         return "rule_based_v1"
 
     def decide(self, context: AgentContext) -> list[ReorderDecision]:
+        print("I AM RULE-BASED AGENT HAHAHA!")
+
         decisions: list[ReorderDecision] = []
 
         for item_id, item_state in context.item_states.items():

@@ -684,6 +684,8 @@ class LLMAgentWrapper(BaseAgent):
         '''
 
         print(f"RAW RESPONSE OF TYPE {type(raw_response)} (element type {type(raw_response[0])})= {raw_response}")
+        for r in raw_response:
+            print(f"TYPE = {type(r)}")
         if isinstance(raw_response, list) and all(
             isinstance(d, ReorderDecision) for d in raw_response
         ):

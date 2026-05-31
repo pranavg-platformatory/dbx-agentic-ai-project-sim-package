@@ -276,14 +276,13 @@ def follows_reorder_agent_class_contract(object:object) -> bool:
         if not isinstance(item_id, str): raise TypeError
         print("item_id is str")
         if not isinstance(order_qty, int): raise TypeError
-        print("order_qty is str")
+        print("order_qty is int")
         if not isinstance(reasoning, str) and not (reasoning is None): raise TypeError
         print(f"reasoning is {type(reasoning)}")
-        if not isinstance(is_reorder(), bool): raise TypeError
-        print("is_reorder() is bool")
-        if not isinstance(is_hold(), bool): raise TypeError
-        print("is_hold() is bool")
-        # NOTE: If is_reorder or is_hold are not callable, a TypeError is still raised.
+        if not isinstance(is_reorder, bool): raise TypeError
+        print("is_reorder is bool")
+        if not isinstance(is_hold, bool): raise TypeError
+        print("is_hold is bool")
     except TypeError:
         return False
 

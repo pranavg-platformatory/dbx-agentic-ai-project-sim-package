@@ -263,6 +263,7 @@ def log_agent_decision(
     Returns:
         Confirmation string
     '''
+    
     spark = _get_spark()
     safe_rationale = rationale.replace("'", "''")
     spark.sql(f'''

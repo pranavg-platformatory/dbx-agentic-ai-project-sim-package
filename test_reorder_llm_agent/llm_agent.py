@@ -524,6 +524,7 @@ class LLMReorderAgent(BaseAgent):
         except Exception as e:
             print(f'[LLMReorderAgent] ERROR in LangGraph invoke: {e}')
             return _fallback_hold(context, reason=f'LangGraph error: {e}')
+    
     #====================================
     # BaseAgent contract
     #====================================

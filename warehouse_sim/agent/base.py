@@ -260,25 +260,17 @@ def follows_reorder_agent_class_contract(object:object) -> bool:
     
     try:
         item_id = object.item_id
-        print("item_id is there")
         order_qty = object.order_qty
-        print("order_qty is there")
         reasoning = object.reasoning
-        print("reasoning is there")
         is_reorder = object.is_reorder
-        print("is_reorder is there")
         is_hold = object.is_hold
-        print("is_hold is there")
     except AttributeError:
         return False
 
     try:
         if not isinstance(item_id, str): raise TypeError
-        print("item_id is str")
         if not isinstance(order_qty, int): raise TypeError
-        print("order_qty is str")
         if not isinstance(reasoning, str) and not (reasoning is None): raise TypeError
-        print(f"reasoning is {type(reasoning)}")
         if not isinstance(is_reorder(), bool): raise TypeError
         if not isinstance(is_hold(), bool): raise TypeError
         # NOTE: If is_reorder or is_hold are not callable, a TypeError is still raised.

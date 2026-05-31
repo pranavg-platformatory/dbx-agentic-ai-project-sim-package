@@ -11,7 +11,7 @@ agent:
   type: llm
 simulation:
   run_mode: infinite
-  tick_unit: minute
+  tick_unit: hour
   tick_duration_seconds: 3.0
   print_every_n_ticks: 1
   seed: 42

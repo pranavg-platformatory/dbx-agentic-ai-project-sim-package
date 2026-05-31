@@ -11,12 +11,12 @@ agent:
   type: rule_based
 simulation:
   run_mode: infinite
-  tick_unit: hour
+  tick_unit: minute
   tick_duration_seconds: 3.0
   print_every_n_ticks: 1
   seed: 42
 llm_agent:
-  executor_trigger_n: 4
+  executor_trigger_n: 1
   package_path: /Workspace/Shared/reorder-llm-agent
   config_override: {}
 world:

@@ -132,7 +132,7 @@ DEFAULT_TICK_UNIT                 = "hour"
 DEFAULT_TICK_DURATION_SECONDS     = 3.0
 DEFAULT_PRINT_EVERY_N_TICKS       = 1
 DEFAULT_SEED                      = 42
-DEFAULT_EXECUTOR_TRIGGER_N        = 4
+DEFAULT_EXECUTOR_TRIGGER_N        = 2
 DEFAULT_LLM_PACKAGE_PATH          = "/Workspace/Shared/reorder-llm-agent"
 DEFAULT_BUDGET_LIMIT              = None           # null in YAML = unlimited
 DEFAULT_BUDGET_WARNING_THRESHOLD  = 0.10

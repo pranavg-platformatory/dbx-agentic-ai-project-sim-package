@@ -514,8 +514,7 @@ class SimRunner:
                 exc_msg  = str(exc),
             )
             # Substitute hold decisions for every item in the current context.
-            # order_qty=0 is the hold signal recognised downstream; reasoning
-            # records that this was an emergency fallback, not an agent choice.
+            # order_qty=0 is the hold signal recognised downstream; reasoning records that this was an emergency fallback, not an agent choice.
             decisions = [
                 ReorderDecision(
                     item_id   = item_id,
@@ -527,6 +526,7 @@ class SimRunner:
                 )
                 for item_id in context.item_states
             ]
+            self._log(f"EXCEPTION! EXCEPTION! {exc}")
 
         placed_orders: list[PlacedOrder] = []
         tick_order_costs: dict[str, float] = {i: 0.0 for i in self._world.items}

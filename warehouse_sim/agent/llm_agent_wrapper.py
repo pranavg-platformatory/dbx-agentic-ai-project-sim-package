@@ -586,6 +586,7 @@ class LLMAgentWrapper(BaseAgent):
                 error        = f"LLM call raised exception: {type(e).__name__}: {e}",
             )
             with self._slot_lock:
+                print("OH NO! FALLBACK_STRUCTURAL :(")
                 self._result_slot = ExecutorResult(
                     decisions        = self._fallback_agent.decide(context),
                     produced_at_tick = chosen.trigger_tick,
@@ -633,6 +634,7 @@ class LLMAgentWrapper(BaseAgent):
                     violations   = logical_violations
                 )
                 fallback_type = "FALLBACK_LOGICAL"
+                print("OH NO! FALLBACK_LOGICAL :(")
                 decisions     = self._fallback_agent.decide(context)
 
         # Step 6: Write result and mark idle

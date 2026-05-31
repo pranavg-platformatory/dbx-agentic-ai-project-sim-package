@@ -5,7 +5,7 @@
 # Edit the bounds at the top of generate_world_config.py to change
 # the randomisation ranges, then re-run to produce a new config.
 
-sim_id: sim_continuous_llm_agent
+sim_id: sim_continuous_llm_agent_with_5_items
 catalog: hackathon_of_the_century
 agent:
   type: llm

@@ -630,12 +630,12 @@ class LLMAgentWrapper(BaseAgent):
             logical_violations = self._validate_logical(decisions, context)
 
             if logical_violations:
+                print(f"OH NO! FALLBACK_LOGICAL = {logical_violations}")
                 self._logger.fallback_logical(
                     tick         = current_tick,
                     violations   = logical_violations
                 )
                 fallback_type = "FALLBACK_LOGICAL"
-                print("OH NO! FALLBACK_LOGICAL :(")
                 decisions     = self._fallback_agent.decide(context)
 
         # Step 6: Write result and mark idle
@@ -683,6 +683,7 @@ class LLMAgentWrapper(BaseAgent):
         - (str, optional): Error message (only given on failure)
         '''
 
+        print(f"RAW RESPONSE OF TYPE {type(raw_response)} (element type {type(raw_response[0])})= {raw_response}")
         if isinstance(raw_response, list) and all(
             isinstance(d, ReorderDecision) for d in raw_response
         ):

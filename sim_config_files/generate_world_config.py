@@ -9,10 +9,10 @@ Usage:
     python3 generate_world_config.py \
         --sim-id      sim_continuous_rule_based \
         --output      sim_config--generated.yaml \
-        --items       20 \
-        --suppliers   20 \
-        --consumers   20 \
-        --disruptions 6
+        --items       5 \
+        --suppliers   5 \
+        --consumers   5 \
+        --disruptions 3
 
 All arguments are optional; defaults are shown above in the example.
 Run with --help for the full list.
@@ -126,7 +126,7 @@ DISRUPTION_END_TICK         = 999_999
 # ── Simulation defaults (not randomised; exposed for easy editing) ─────────────
 
 DEFAULT_CATALOG                   = "hackathon_of_the_century"
-DEFAULT_AGENT_TYPE                = "llm" # available types: "llm", "rule_based"
+DEFAULT_AGENT_TYPE                = "rule_based" # available types: "llm", "rule_based"
 DEFAULT_RUN_MODE                  = "infinite"
 DEFAULT_TICK_UNIT                 = "hour"
 DEFAULT_TICK_DURATION_SECONDS     = 3.0

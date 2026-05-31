@@ -952,6 +952,7 @@ class SimRunner:
 
     def _check_budget_events(self, tick: int) -> None:
         '''Fire BUDGET_WARNING and BUDGET_EXHAUSTED events as needed.'''
+        
         if self._remaining_budget is None:
             return
 

@@ -19,6 +19,7 @@
 | --- | --- |
 | Warehouse simulation package | [`warehouse_sim`](./warehouse_sim/) |
 | Test Reorder LLM Agent | [`test_reorder_llm_agent`](./test_reorder_llm_agent/) |
+| Simulation Configuration Files | [`sim_config_files`](./sim_config_files/) |
 | Devlog | [`devlog.md`](./devlog.md) |
 | Data store definition | [`_dataStoreDefinition`](./_dataStoreDefinition/) |
 | Test notebooks | [`_testNotebooks`](./_testNotebooks/) |
